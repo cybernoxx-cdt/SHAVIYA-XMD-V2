@@ -1,161 +1,189 @@
 const { cmd } = require("../command");
+const yts = require("yt-search");
+const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
-const axios = require("axios");
-const yts = require("yt-search");
+const ffmpeg = require("fluent-ffmpeg");
 
-// ───────── CONFIGURATION ─────────
-const API_KEY = "darkshan-75704c1b";
-const AC2_FOOTER = "╭𝐇𝐀𝐒𝐈𝐘𝐀 𝐌𝐃╮";
-const TEMP_DIR = path.resolve(__dirname, "../temp");
-
-if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
-
-/**
- * Infinity Multi-Reply Listener
- */
-function listenForReplies(conn, from, sender, targetId, callback) {
-    const handler = (update) => {
-        const msg = update.messages?.[0];
-        if (!msg?.message) return;
-
-        const text = msg.message.conversation || msg.message?.extendedTextMessage?.text || "";
-        const context = msg.message?.extendedTextMessage?.contextInfo;
-        const msgSender = msg.key.participant || msg.key.remoteJid;
-        
-        const isTargetReply = context?.stanzaId === targetId;
-        const isCorrectUser = msgSender.includes(sender.split('@')[0]) || msgSender.includes("@lid");
-
-        if (msg.key.remoteJid === from && isCorrectUser && isTargetReply) {
-            callback({ msg, text: text.trim() });
+// Fake ChatGPT vCard
+const fakevCard = {
+    key: {
+        fromMe: false,
+        participant: "0@s.whatsapp.net",
+        remoteJid: "status@broadcast"
+    },
+    message: {
+        contactMessage: {
+            displayName: "© Mr Shaviya",
+            vcard: `BEGIN:VCARD
+VERSION:3.0
+FN:Meta
+ORG:META AI;
+TEL;type=CELL;type=VOICE;waid=94762095304:+94762095304
+END:VCARD`
         }
-    };
+    }
+};
 
-    conn.ev.on("messages.upsert", handler);
-    setTimeout(() => { conn.ev.off("messages.upsert", handler); }, 900000);
-}
+cmd({
+  pattern: "song",
+  alias: ["play", "song1"],
+  desc: "YouTube Song Downloader (Multi Reply + Voice Note Fixed)",
+  category: "download",
+  filename: __filename,
+}, async (conn, m, store, { from, quoted, q, reply }) => {
+  try {
+    /* ===== QUERY ===== */
+    let query = q?.trim();
 
-cmd(
-  {
-    pattern: "song",
-    alias: ["audio", "play"],
-    ownerOnly: true,
-    react: "🎶",
-    desc: "Infinite Multi-Reply Song Downloader with Thumbnails",
-    category: "download",
-    filename: __filename,
-  },
-  async (bot, mek, m, { from, q, reply, sender, sessionId }) => {
-    try {
-      let query = typeof q === "string" ? q.trim() : "";
-      if (!query) return reply("❌ කරුණාකර නමක් හෝ ලින්ක් එකක් ලබා දෙන්න.");
-
-      await bot.sendMessage(from, { react: { text: "🔍", key: mek.key } });
-
-      // --- 1. SEARCH LIST WITH THUMBNAIL ---
-      const search = await yts(query);
-      const results = search.videos.slice(0, 10);
-      if (results.length === 0) return reply("❌ කිසිවක් හමු නොවීය.");
-
-      let listText = "🎶 *𝐇𝐀𝐒𝐈𝐘𝐀-𝐌𝐃 𝐒𝐎𝐍𝐆 𝐒𝐄𝐀𝐑𝐂𝐇*\n\n";
-      results.forEach((v, i) => { listText += `*${i + 1}.* ${v.title}\n⏱️ ${v.timestamp}\n\n`; });
-
-      // Search list send (button on/off aware)
-      const songButtons = results.map((v, i) => ({ id: String(i+1), text: `${i+1}. ${v.title.slice(0,40)}` }));
-      const sentSearch = await global.sendInteractiveButtons(bot, from, {
-          header: "🎶 SHAVIYA-XMD V2 SONG SEARCH",
-          body: listText + `🔢 *Reply the number to select the song.*`,
-          footer: "✨ SHAVIYA TECH · PREMIUM EDITION",
-          buttons: songButtons,
-          _sessionId: sessionId
-      }, mek);
-
-      // SEARCH LIST INFINITY REPLY
-      listenForReplies(bot, from, sender, sentSearch.key.id, async (selection) => {
-          const idx = parseInt(selection.text) - 1;
-          if (!results[idx]) return;
-
-          // REACTION: WAIT
-          await bot.sendMessage(from, { react: { text: "⏳", key: selection.msg.key } });
-          
-          const videoUrl = results[idx].url;
-          // සින්දුවට අදාළ ඩේටා process කරන්න යවනවා
-          await processAudioFlow(bot, from, sender, videoUrl, selection.msg, results[idx]);
-      });
-
-    } catch (err) {
-      console.error(err);
-      reply(`❌ Error: ${err.message}`);
+    if (!query && m?.quoted) {
+      query =
+        m.quoted.message?.conversation ||
+        m.quoted.message?.extendedTextMessage?.text ||
+        m.quoted.text;
     }
 
-    // --- 2. AUDIO SELECTOR WITH SONG THUMBNAIL ---
-    async function processAudioFlow(conn, from, sender, url, quotedMek, searchItem) {
-        try {
-            const res = await axios.get(`https://sayuradark-api-two.vercel.app/api/download/ytdl?apikey=${API_KEY}&url=${encodeURIComponent(url)}`);
-            const data = res.data?.result;
-            if (!data) return;
+    if (!query) {
+      return reply(
+        "⚠️ Please provide a song name or YouTube link (or reply to a message)."
+      );
+    }
 
-            // සින්දුවට අදාළ විස්තර සහිත මැසේජ් එක
-            let selectMsg = `⫷⦁[ *𝐇𝐀𝐒𝐈𝐘𝐀. 𝐌𝐃 ]⦁⫸\n\n` +
-                            `📃 *Title:* ${data.title}\n` +
-                            `⏱️ *Time:* ${searchItem.timestamp}\n` +
-                            `🔗 *URL:* ${url}\n\n` +
-                            `*REPLY THE NUMBER TO DOWNLOAD*\n\n` +
-                            `1 ┃ Audio 🎵\n` +
-                            `2 ┃ Document 📁\n` +
-                            `3 ┃ Voice Note 🎙️`;
+    if (query.includes("youtube.com/shorts/")) {
+      const id = query.split("/shorts/")[1].split(/[?&]/)[0];
+      query = `https://www.youtube.com/watch?v=${id}`;
+    }
 
-            // Audio type selector (button on/off aware)
-            const typeButtons = [
-                { id: "1", text: "1. Audio 🎵" },
-                { id: "2", text: "2. Document 📁" },
-                { id: "3", text: "3. Voice Note 🎙️" }
-            ];
-            const sentSelect = await global.sendInteractiveButtons(conn, from, {
-                header: "🎵 " + (data.title || "Song"),
-                body: selectMsg,
-                footer: "✨ SHAVIYA TECH · PREMIUM EDITION",
-                buttons: typeButtons,
-                _sessionId: sessionId
-            }, quotedMek);
+    await conn.sendMessage(from, { react: { text: '🎵', key: m.key } });
 
-            // TYPE SELECTOR INFINITY REPLY
-            listenForReplies(conn, from, sender, sentSelect.key.id, async (qSel) => {
-                const choice = qSel.text;
-                if (!["1", "2", "3"].includes(choice)) return;
+    /* ===== SEARCH ===== */
+    const search = await yts(query);
+    if (!search.videos.length)
+      return reply("❌ Song not found or API error.");
 
-                // REACTION: DOWNLOADING
-                await conn.sendMessage(from, { react: { text: "📥", key: qSel.msg.key } });
+    const video = search.videos[0];
 
-                const filePath = path.join(TEMP_DIR, `audio_${Date.now()}.mp3`);
-                const response = await axios({ method: 'get', url: data.mp3, responseType: 'stream' });
-                const writer = fs.createWriteStream(filePath);
-                response.data.pipe(writer);
+    /* ===== API ===== */
+    const api = `https://api-aswin-sparky.koyeb.app/api/downloader/song?search=${encodeURIComponent(
+      video.url
+    )}`;
+    const { data } = await axios.get(api);
+    if (!data?.status || !data?.data?.url)
+      return reply("*❌ Download error*");
 
-                writer.on('finish', async () => {
-                    let audioConfig = {};
-                    if (choice === "1") {
-                        audioConfig = { audio: fs.readFileSync(filePath), mimetype: "audio/mpeg" };
-                    } else if (choice === "2") {
-                        audioConfig = { 
-                            document: fs.readFileSync(filePath), 
-                            mimetype: "audio/mpeg", 
-                            fileName: `${data.title}.mp3`,
-                            caption: AC2_FOOTER 
-                        };
-                    } else if (choice === "3") {
-                        audioConfig = { audio: fs.readFileSync(filePath), mimetype: "audio/mp4", ptt: true };
-                    }
+    const songUrl = data.data.url;
 
-                    await conn.sendMessage(from, audioConfig, { quoted: qSel.msg });
-                    
-                    // REACTION: SUCCESS
-                    await conn.sendMessage(from, { react: { text: "✅", key: qSel.msg.key } });
-                    
-                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-                });
+    /* ===== MENU ===== */
+    const sentMsg = await conn.sendMessage(
+      from,
+      {
+        image: { url: video.thumbnail },
+        caption: `
+🎶 *𝗦𝗛𝗔𝗩𝗜𝗬𝗔-𝗫𝗠𝗗 SONG DOWNLOADER* 🎶
+
+📑 *Title:* ${video.title}
+⏱ *Duration:* ${video.timestamp}
+📆 *Uploaded:* ${video.ago}
+👁 *Views:* ${video.views}
+🔗 *Url:* ${video.url}
+
+🔽 *Reply with your choice:*
+
+1️⃣ Audio Type 🎵  
+2️⃣ Document Type 📁  
+3️⃣ Voice Note Type 🎤  
+
+> © Powered by 𝗦𝗛𝗔𝗩𝗜𝗬𝗔-𝗫𝗠𝗗 𝘃2 🌛`,
+      },
+      { quoted: fakevCard }
+    );
+
+    const messageID = sentMsg.key.id;
+
+    // 🧠 Reply listener
+    conn.ev.on("messages.upsert", async (msgData) => {
+      const receivedMsg = msgData.messages[0];
+      if (!receivedMsg?.message) return;
+
+      const receivedText = receivedMsg.message.conversation || receivedMsg.message.extendedTextMessage?.text;
+      const senderID = receivedMsg.key.remoteJid;
+      const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === messageID;
+
+      if (isReplyToBot) {
+        await conn.sendMessage(senderID, { react: { text: '⬇️', key: receivedMsg.key } });
+
+        let mediaMsg;
+
+        switch (receivedText.trim()) {
+          case "1":
+            await conn.sendMessage(senderID, { react: { text: '⬆️', key: receivedMsg.key } });
+            mediaMsg = await conn.sendMessage(senderID, {
+              audio: { url: songUrl },
+              mimetype: "audio/mpeg",
+            }, { quoted: receivedMsg });
+            await conn.sendMessage(senderID, { react: { text: '✔️', key: receivedMsg.key } });
+            break;
+
+          case "2":
+            await conn.sendMessage(senderID, { react: { text: '⬆️', key: receivedMsg.key } });
+            
+            const buffer = await axios.get(songUrl, {
+              responseType: "arraybuffer",
             });
-        } catch (e) { console.error(e); }
-    }
+
+            mediaMsg = await conn.sendMessage(senderID, {
+              document: buffer.data,
+              mimetype: "audio/mpeg",
+              fileName: `${video.title.replace(/[\\/:*?"<>|]/g, "")}.mp3`,
+            }, { quoted: receivedMsg });
+            
+            await conn.sendMessage(senderID, { react: { text: '✔️', key: receivedMsg.key } });
+            break;
+
+          case "3":
+            await conn.sendMessage(senderID, { react: { text: '⬆️', key: receivedMsg.key } });
+            
+            const mp3Path = path.join(__dirname, `${Date.now()}.mp3`);
+            const opusPath = path.join(__dirname, `${Date.now()}.opus`);
+
+            // Download mp3
+            const stream = await axios.get(songUrl, { responseType: "stream" });
+            const writer = fs.createWriteStream(mp3Path);
+            stream.data.pipe(writer);
+            await new Promise(r => writer.on("finish", r));
+
+            // Convert to opus
+            await new Promise((resolve, reject) => {
+              ffmpeg(mp3Path)
+                .audioCodec("libopus")
+                .format("opus")
+                .save(opusPath)
+                .on("end", resolve)
+                .on("error", reject);
+            });
+
+            mediaMsg = await conn.sendMessage(senderID, {
+              audio: fs.readFileSync(opusPath),
+              mimetype: "audio/ogg; codecs=opus",
+              ptt: true,
+            }, { quoted: receivedMsg });
+
+            // Cleanup temp files
+            fs.unlinkSync(mp3Path);
+            fs.unlinkSync(opusPath);
+            
+            await conn.sendMessage(senderID, { react: { text: '✔️', key: receivedMsg.key } });
+            break;
+
+          default:
+            await conn.sendMessage(senderID, { react: { text: '😒', key: receivedMsg.key } });
+            reply("*❌ Invalid option!*");
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("*Song2 Plugin Error*:", error);
+    reply("*Error downloading or sending audio.*");
   }
-);
+});
