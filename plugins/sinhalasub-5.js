@@ -21,7 +21,7 @@ function getBotName(sessionId) {
 
 function getHardThumbUrl(sessionId) {
   return getSessionConfig(sessionId).thumbUrl ||
-    "https://files.catbox.moe/f18ceb.jpg";
+    "https://image2url.com/r2/default/images/1774184263251-f9306abd-80ec-4b38-830e-73649a3d687e.png";
 }
 
 function isMovieDocOn(sessionId) {
