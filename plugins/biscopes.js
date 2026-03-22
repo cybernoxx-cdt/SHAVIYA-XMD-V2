@@ -4,7 +4,7 @@ const sharp = require('sharp');
 
 const FOOTER = "𝐌𝐫.𝐇𝐚𝐬𝐢𝐲𝐚 𝐓𝐞𝐜𝐡 © 𝟐𝟎𝟐𝟔 🌏";
 const API_BASE = "https://biscopes.vercel.app";
-const fixed_thumb_url = "https://files.catbox.moe/f18ceb.jpg";
+const fixed_thumb_url = "https://image2url.com/r2/default/images/1774184263251-f9306abd-80ec-4b38-830e-73649a3d687e.png";
 
 // React helper
 async function react(conn, jid, key, emoji) {
