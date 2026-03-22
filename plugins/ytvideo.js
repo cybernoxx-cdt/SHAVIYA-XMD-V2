@@ -52,7 +52,7 @@ cmd(
     category: "download",
     filename: __filename,
   },
-  async (bot, mek, m, { from, q, reply, sender }) => {
+  async (bot, mek, m, { from, q, reply, sender, sessionId }) => {
     try {
       let query = typeof q === "string" ? q.trim() : "";
       if (!query) return reply("❌ කරුණාකර නමක් හෝ ලින්ක් එකක් ලබා දෙන්න.");
@@ -68,10 +68,14 @@ cmd(
           let listText = "🎬 *𝐇𝐀𝐒𝐈𝐘𝐀-𝐌𝐃 𝐘𝐎𝐔𝐓𝐔𝐁𝐄 𝐒𝐄𝐀𝐑𝐂𝐇*\n\n";
           results.forEach((v, i) => { listText += `*${i + 1}.* ${v.title}\n⏱️ ${v.timestamp}\n\n`; });
 
-          const sentSearch = await bot.sendMessage(from, { 
-              image: { url: results[0].thumbnail },
-              caption: listText + `🔢 *Reply Number (Infinity Support)*` 
-          }, { quoted: mek });
+          const vidSearchButtons = results.map((v, i) => ({ id: String(i+1), text: `${i+1}. ${v.title.slice(0,40)}` }));
+          const sentSearch = await global.sendInteractiveButtons(bot, from, {
+              header: "🎬 SHAVIYA-XMD V2 VIDEO SEARCH",
+              body: listText + `🔢 *Reply Number (Infinity Support)*`,
+              footer: "✨ SHAVIYA TECH · PREMIUM EDITION",
+              buttons: vidSearchButtons,
+              _sessionId: sessionId
+          }, mek);
 
           // SEARCH LIST INFINITY REPLY
           listenForReplies(bot, from, sender, sentSearch.key.id, async (selection) => {
@@ -108,10 +112,21 @@ cmd(
                             `📁 *Document Mode (Thumbnail සහිතව)*\n` +
                             `4. 720p | 5. 480p | 6. 360p`;
 
-            const sentSelect = await conn.sendMessage(from, { 
-                image: { url: thumbUrl }, 
-                caption: selectMsg 
-            }, { quoted: quotedMek });
+            const qualButtons = [
+                { id: "1", text: "1. Video 720p 📺" },
+                { id: "2", text: "2. Video 480p 📺" },
+                { id: "3", text: "3. Video 360p 📺" },
+                { id: "4", text: "4. Doc 720p 📁" },
+                { id: "5", text: "5. Doc 480p 📁" },
+                { id: "6", text: "6. Doc 360p 📁" }
+            ];
+            const sentSelect = await global.sendInteractiveButtons(conn, from, {
+                header: "🎬 " + (data.title || "Video").slice(0, 60),
+                body: selectMsg,
+                footer: "✨ SHAVIYA TECH · PREMIUM EDITION",
+                buttons: qualButtons,
+                _sessionId: sessionId
+            }, quotedMek);
 
             // QUALITY SELECTOR INFINITY REPLY
             listenForReplies(conn, from, sender, sentSelect.key.id, async (qSel) => {
