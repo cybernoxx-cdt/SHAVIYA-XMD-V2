@@ -13,5 +13,15 @@
   "bannedUsers": [],
   "allowedGroups": [],
   "pluginStatus": {},
-  "lastUpdated": 1700000000000
+  "lastUpdated": 1700000000000,
+  "autoVoice": false,
+  "autoTyping": false,
+  "autoRecording": false,
+  "button": false,
+  "buttonStyle": "default",
+  "footer": "Powered By SHAVIYA-XMD V2 💎",
+  "thumb": "",
+  "prefix": ".",
+  "fname": "",
+  "moviedoc": false
 }
