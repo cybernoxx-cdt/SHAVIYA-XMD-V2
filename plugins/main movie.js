@@ -35,7 +35,7 @@ cmd({
     try {
         if (!q) return reply("❗ කරුණාකර සෙවිය යුතු ෆිල්ම් එකේ නම ලබා දෙන්න.");
 
-        const posterUrl = "https://files.catbox.moe/f18ceb.jpg";
+        const posterUrl = "https://image2url.com/r2/default/images/1774184263251-f9306abd-80ec-4b38-830e-73649a3d687e.png";
 
         // --- Premium UI Design ---
         let menu = `╭━━━〔 🎬 SHAVIYA-XMD V2 MOVIE ENGINE 〕━━━⬣
