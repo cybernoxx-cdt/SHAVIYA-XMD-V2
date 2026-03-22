@@ -1,0 +1,48 @@
+{
+  "name": "SHAVIYA-XMD-V2",
+  "description": "SHAVIYA-XMD V2 — Premium WhatsApp Bot",
+  "logo": "https://files.catbox.moe/f18ceb.jpg",
+  "keywords": ["SHAVIYA-XMD-V2", "WhatsApp-Bot", "SHAVIYA-TECH"],
+  "success_url": "/",
+  "stack": "heroku-24",
+  "env": {
+    "SESSION_ID": {
+      "description": "Your session ID — base64 encoded creds.json OR a MEGA link.",
+      "required": true,
+      "value": ""
+    },
+    "MONGODB_URI": {
+      "description": "MongoDB connection string (optional).",
+      "required": false,
+      "value": ""
+    },
+    "PREFIX": {
+      "description": "Bot command prefix.",
+      "required": false,
+      "value": "."
+    },
+    "MODE": {
+      "description": "Bot mode: public / private / inbox / groups / premium",
+      "required": false,
+      "value": "public"
+    },
+    "OWNER_NUMBER": {
+      "description": "Your WhatsApp number without + (e.g. 94712345678)",
+      "required": true,
+      "value": ""
+    },
+    "ALIVE_IMG": {
+      "description": "Alive command image URL",
+      "required": false,
+      "value": "https://files.catbox.moe/f18ceb.jpg"
+    },
+    "MENU_IMG": {
+      "description": "Menu image URL",
+      "required": false,
+      "value": "https://files.catbox.moe/f18ceb.jpg"
+    }
+  },
+  "buildpacks": [
+    { "url": "https://github.com/heroku/heroku-buildpack-nodejs.git" }
+  ]
+}
