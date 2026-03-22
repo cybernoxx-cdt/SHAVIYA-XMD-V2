@@ -62,28 +62,36 @@ cmd({
 },
 async (conn, mek, m, { from, body, isOwner }) => {
     try {
-        // Check runtime setting first (persisted), fallback to config
+        // Check runtime setting (persisted), fallback to config
         const config = require('../config');
         const enabled = getSetting('autoVoice') ?? (config.AUTO_VOICE === true || config.AUTO_VOICE === 'true');
         if (!enabled) return;
         if (isOwner) return;
+        if (!body || body.trim() === '') return;
 
         const filePath = path.join(__dirname, '../ranumitha_data/autovoice.json');
         if (!fs.existsSync(filePath)) return;
 
         const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
         for (const text in data) {
-            if (body.toLowerCase() === text.toLowerCase()) {
+            if (body.trim().toLowerCase() === text.trim().toLowerCase()) {
+                const audioUrl = data[text];
+
+                // Detect mimetype from URL extension
+                const isOpus = audioUrl.toLowerCase().includes('.opus');
+                const mimetype = isOpus ? 'audio/ogg; codecs=opus' : 'audio/mpeg';
+
                 await conn.sendPresenceUpdate('recording', from);
                 await conn.sendMessage(
                     from,
-                    { audio: { url: data[text] }, mimetype: 'audio/mpeg', ptt: true },
+                    { audio: { url: audioUrl }, mimetype: mimetype, ptt: true },
                     { quoted: mek }
                 );
                 break;
             }
         }
     } catch (err) {
-        // Silent fail — don't crash bot on missing data file
+        console.log('[AUTO-VOICE ERROR]:', err.message);
     }
 });
