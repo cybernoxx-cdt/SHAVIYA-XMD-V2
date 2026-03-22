@@ -7,7 +7,7 @@ const sharp = require('sharp'); // Thumbnail සැකසීමට අවශ්�
 // ───────── CONFIGURATION ─────────
 const FOOTER = "𝐌𝐫.𝐇𝐚𝐬𝐢𝐲𝐚 𝐓𝐞𝐜𝐡 𝐌𝐨𝐯𝐢𝐞 © 𝟐𝟎𝟐𝟔 🇱🇰";
 // ඔබේ ස්ථාවර GitHub පින්තූර ලින්ක් එක (thumbnail සඳහා)
-const fixed_thumb_url = "https://files.catbox.moe/f18ceb.jpg";
+const fixed_thumb_url = "https://image2url.com/r2/default/images/1774184263251-f9306abd-80ec-4b38-830e-73649a3d687e.png";
 // ඔබේ Sayura Cinema API URL එක මෙතැනට දමන්න
 const API_BASE = "https://sayura-cinema-api.vercel.app"; 
 
