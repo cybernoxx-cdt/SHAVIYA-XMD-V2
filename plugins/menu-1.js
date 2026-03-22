@@ -12,7 +12,7 @@ cmd({
     react: "👑",
     filename: __filename
 },
-async (conn, mek, m, { from, pushname, reply, sessionId }) => {
+async (conn, mek, m, { from, pushname, reply }) => {
     try {
         const name = m.pushName || pushname || "User";
         const posterUrl = "https://files.catbox.moe/f18ceb.jpg";
@@ -74,27 +74,17 @@ _⏳ Menu expires in 5 minutes_
             }
         };
 
-        // ── Send Main Menu (button on/off aware) ──
-        const menuButtons = [
-            { id: "1", text: "📥 Download Menu" },
-            { id: "2", text: "🎬 Movie Hub Menu" },
-            { id: "3", text: "🤖 AI & Tools Menu" },
-            { id: "4", text: "👥 Group Menu" },
-            { id: "5", text: "⚙️ Settings Menu" },
-            { id: "6", text: "💎 Access Control" },
-            { id: "7", text: "👑 Owner Menu" },
-            { id: "8", text: "⚡ System Menu" }
-        ];
-
+        // ── Send Main Menu ──
         let sentMsg;
         try {
-            sentMsg = await global.sendInteractiveButtons(conn, from, {
-                header: "👑 SHAVIYA-XMD V2",
-                body: menuCaption,
-                footer: "✨ SHAVIYA TECH · PREMIUM EDITION",
-                buttons: menuButtons,
-                _sessionId: sessionId
-            }, FakeVCard);
+            sentMsg = await Promise.race([
+                conn.sendMessage(from, {
+                    image: { url: posterUrl },
+                    caption: menuCaption,
+                    contextInfo: contextInfo
+                }, { quoted: FakeVCard }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000))
+            ]);
         } catch (e) {
             sentMsg = await conn.sendMessage(from,
                 { text: menuCaption, contextInfo: contextInfo },
