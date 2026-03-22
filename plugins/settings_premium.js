@@ -155,95 +155,120 @@ async (conn, mek, m, { from, isOwner, reply, sessionId }) => {
         sentMenu = await conn.sendMessage(from, { text: menuTxt }, { quoted: mek });
     }
 
-    const menuMsgId = sentMenu.key.id;
+    // ── Store latest menu msg ID in global (per user) ─
+    const ownerNum = m.sender.split('@')[0].split(':')[0];
+    if (!global._settingsMenuIds) global._settingsMenuIds = new Map();
+    global._settingsMenuIds.set(ownerNum, {
+        menuId: sentMenu.key.id,
+        conn,
+        from,
+        sessionId
+    });
+});
 
-    // ── Reply listener ─────────────────────────
-    const handler = async (update) => {
-        try {
-            const msg = update.messages?.[0];
-            if (!msg?.message) return;
+// ── Global persistent settings reply handler ──────────────
+// Runs on EVERY message, no timeout, no expire
+// Works with original menu reply AND any subsequent menu reply
+cmd({ on: 'body' },
+async (conn, mek, m, { from, body, isOwner }) => {
+    try {
+        if (!isOwner) return;
+        if (!global._settingsMenuIds) return;
 
-            const text    = (msg.message.conversation || msg.message?.extendedTextMessage?.text || '').trim();
-            const context = msg.message?.extendedTextMessage?.contextInfo;
-            const sender  = msg.key.participant || msg.key.remoteJid;
+        const ownerNum = m.sender.split('@')[0].split(':')[0];
+        const session  = global._settingsMenuIds.get(ownerNum);
+        if (!session) return;
 
-            const isReply   = context?.stanzaId === menuMsgId;
-            const isCorrect = sender.includes(m.sender.split('@')[0]);
-            if (!isReply || !isCorrect) return;
+        const msg     = mek;
+        const context = msg.message?.extendedTextMessage?.contextInfo;
+        if (!context?.stanzaId) return;
 
-            // Parse: "7" = ON,  "7.5" = OFF
-            const isOff    = text.endsWith('.5');
-            const numPart  = isOff ? text.slice(0, -2) : text;
-            const num      = parseFloat(numPart);
-            const setting  = SETTINGS_LIST.find(s => s.id === num);
+        // Check if this is a reply to ANY settings menu message
+        if (context.stanzaId !== session.menuId) return;
 
-            if (!setting) {
-                await conn.sendMessage(from, {
-                    text: `❌ *Invalid number:* ${text}\n\nType a number from the settings menu.\nExample: *7* = Auto Recording ON | *7.5* = OFF`,
-                }, { quoted: msg });
-                return;
-            }
+        const text   = body.trim();
+        if (!text) return;
 
-            const newVal = !isOff; // true = ON, false = OFF
-            setSetting(setting.key, newVal);
+        // Parse: "7" = ON, "7.5" = OFF
+        const isOff   = text.endsWith('.5');
+        const numPart = isOff ? text.slice(0, -2) : text;
+        const num     = parseFloat(numPart);
 
-            // ── Special handlers ───────────────
-            // Auto Typing
-            if (setting.key === 'autoTyping') {
-                if (newVal) startPresence(conn, from, 'composing', _typingTimers);
-                else {
-                    stopPresence(from, _typingTimers);
-                    conn.sendPresenceUpdate('paused', from).catch(() => {});
-                }
-            }
-            // Auto Recording
-            if (setting.key === 'autoRecording') {
-                if (newVal) startPresence(conn, from, 'recording', _recordingTimers);
-                else {
-                    stopPresence(from, _recordingTimers);
-                    conn.sendPresenceUpdate('paused', from).catch(() => {});
-                }
-            }
-            // Button mode — sync global session state
-            if (setting.key === 'button' && typeof global.setButtonState === 'function') {
-                global.setButtonState(sessionId, newVal);
-            }
+        if (isNaN(num)) return;
 
-            // ── Send updated settings menu ─────
-            const updated  = getAllSettings();
-            const newMenu  = buildSettingsMenu(updated);
-            const statusTxt = newVal ? '✅ *ON*' : '❌ *OFF*';
+        const setting = SETTINGS_LIST.find(s => s.id === num);
 
-            await conn.sendMessage(from, { react: { text: newVal ? '✅' : '❌', key: msg.key } });
-
-            try {
-                await conn.sendMessage(from, {
-                    image: { url: 'https://files.catbox.moe/f18ceb.jpg' },
-                    caption: `${setting.icon} *${setting.label}* → ${statusTxt}\n_Settings saved ✅ No restart needed_\n\n${newMenu}`,
-                    contextInfo: {
-                        forwardingScore: 999,
-                        isForwarded: true,
-                        forwardedNewsletterMessageInfo: {
-                            newsletterJid: '120363421386030144@newsletter',
-                            newsletterName: '⚙️ SHAVIYA-XMD V2 SETTINGS',
-                            serverMessageId: 143
-                        }
-                    }
-                }, { quoted: msg });
-            } catch (e) {
-                await conn.sendMessage(from, {
-                    text: `${setting.icon} *${setting.label}* → ${statusTxt}\n_Saved ✅_\n\n${newMenu}`
-                }, { quoted: msg });
-            }
-
-        } catch (err) {
-            console.log('[SETTINGS HANDLER]:', err.message);
+        if (!setting) {
+            await conn.sendMessage(from, {
+                text: `❌ *Invalid:* ${text}\n\nUse a number from the menu.\n*Example:* 7 = ON | 7.5 = OFF`
+            }, { quoted: mek });
+            return;
         }
-    };
 
-    conn.ev.on('messages.upsert', handler);
-    // Auto remove listener after 10 minutes
-    setTimeout(() => conn.ev.off('messages.upsert', handler), 600000);
+        const newVal    = !isOff;
+        setSetting(setting.key, newVal);
+
+        // ── Special live handlers ────────────
+        if (setting.key === 'autoTyping') {
+            if (newVal) startPresence(conn, from, 'composing', _typingTimers);
+            else { stopPresence(from, _typingTimers); conn.sendPresenceUpdate('paused', from).catch(() => {}); }
+        }
+        if (setting.key === 'autoRecording') {
+            if (newVal) startPresence(conn, from, 'recording', _recordingTimers);
+            else { stopPresence(from, _recordingTimers); conn.sendPresenceUpdate('paused', from).catch(() => {}); }
+        }
+        if (setting.key === 'button' && typeof global.setButtonState === 'function') {
+            global.setButtonState(session.sessionId, newVal);
+        }
+
+        // ── React ─────────────────────────────
+        await conn.sendMessage(from, { react: { text: newVal ? '✅' : '❌', key: mek.key } });
+
+        // ── Send updated menu ─────────────────
+        const updated    = getAllSettings();
+        const newMenuTxt = buildSettingsMenu(updated);
+        const statusTxt  = newVal ? '✅ ON' : '❌ OFF';
+
+        const FakeVCard = {
+            key: { fromMe: false, participant: '0@s.whatsapp.net', remoteJid: 'status@broadcast' },
+            message: { contactMessage: {
+                displayName: '💎 SHAVIYA-XMD V2',
+                vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN:SHAVIYA-XMD V2\nORG:SHAVIYA TECH;\nTEL;type=CELL;type=VOICE;waid=13135550002:+13135550002\nEND:VCARD'
+            }}
+        };
+
+        let newSent;
+        try {
+            newSent = await conn.sendMessage(from, {
+                image: { url: 'https://files.catbox.moe/f18ceb.jpg' },
+                caption: `${setting.icon} *${setting.label}* → *${statusTxt}*\n✅ _Saved instantly — no restart needed_\n\n${newMenuTxt}`,
+                contextInfo: {
+                    forwardingScore: 999,
+                    isForwarded: true,
+                    forwardedNewsletterMessageInfo: {
+                        newsletterJid: '120363421386030144@newsletter',
+                        newsletterName: '⚙️ SHAVIYA-XMD V2 SETTINGS',
+                        serverMessageId: 143
+                    }
+                }
+            }, { quoted: FakeVCard });
+        } catch (e) {
+            newSent = await conn.sendMessage(from, {
+                text: `${setting.icon} *${setting.label}* → *${statusTxt}*\n✅ _Saved_\n\n${newMenuTxt}`
+            }, { quoted: FakeVCard });
+        }
+
+        // ── Update tracked menu ID to new message ─
+        global._settingsMenuIds.set(ownerNum, {
+            menuId: newSent.key.id,
+            conn,
+            from,
+            sessionId: session.sessionId
+        });
+
+    } catch (err) {
+        console.log('[SETTINGS REPLY]:', err.message);
+    }
 });
 
 // ══════════════════════════════════════════════
