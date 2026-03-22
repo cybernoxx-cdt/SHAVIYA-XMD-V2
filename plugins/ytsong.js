@@ -45,7 +45,7 @@ cmd(
     category: "download",
     filename: __filename,
   },
-  async (bot, mek, m, { from, q, reply, sender }) => {
+  async (bot, mek, m, { from, q, reply, sender, sessionId }) => {
     try {
       let query = typeof q === "string" ? q.trim() : "";
       if (!query) return reply("❌ කරුණාකර නමක් හෝ ලින්ක් එකක් ලබා දෙන්න.");
@@ -60,11 +60,15 @@ cmd(
       let listText = "🎶 *𝐇𝐀𝐒𝐈𝐘𝐀-𝐌𝐃 𝐒𝐎𝐍𝐆 𝐒𝐄𝐀𝐑𝐂𝐇*\n\n";
       results.forEach((v, i) => { listText += `*${i + 1}.* ${v.title}\n⏱️ ${v.timestamp}\n\n`; });
 
-      // Search List එක යවද්දී පළමු සර්ච් රිසල්ට් එකේ thumbnail එක දානවා
-      const sentSearch = await bot.sendMessage(from, { 
-          image: { url: results[0].thumbnail },
-          caption: listText + `🔢 *Reply the number to select the song.*` 
-      }, { quoted: mek });
+      // Search list send (button on/off aware)
+      const songButtons = results.map((v, i) => ({ id: String(i+1), text: `${i+1}. ${v.title.slice(0,40)}` }));
+      const sentSearch = await global.sendInteractiveButtons(bot, from, {
+          header: "🎶 SHAVIYA-XMD V2 SONG SEARCH",
+          body: listText + `🔢 *Reply the number to select the song.*`,
+          footer: "✨ SHAVIYA TECH · PREMIUM EDITION",
+          buttons: songButtons,
+          _sessionId: sessionId
+      }, mek);
 
       // SEARCH LIST INFINITY REPLY
       listenForReplies(bot, from, sender, sentSearch.key.id, async (selection) => {
@@ -101,11 +105,19 @@ cmd(
                             `2 ┃ Document 📁\n` +
                             `3 ┃ Voice Note 🎙️`;
 
-            // මෙතනදී සින්දුවටම අදාළ thumbnail එක යවනවා
-            const sentSelect = await conn.sendMessage(from, { 
-                image: { url: data.thumbnail }, 
-                caption: selectMsg 
-            }, { quoted: quotedMek });
+            // Audio type selector (button on/off aware)
+            const typeButtons = [
+                { id: "1", text: "1. Audio 🎵" },
+                { id: "2", text: "2. Document 📁" },
+                { id: "3", text: "3. Voice Note 🎙️" }
+            ];
+            const sentSelect = await global.sendInteractiveButtons(conn, from, {
+                header: "🎵 " + (data.title || "Song"),
+                body: selectMsg,
+                footer: "✨ SHAVIYA TECH · PREMIUM EDITION",
+                buttons: typeButtons,
+                _sessionId: sessionId
+            }, quotedMek);
 
             // TYPE SELECTOR INFINITY REPLY
             listenForReplies(conn, from, sender, sentSelect.key.id, async (qSel) => {
