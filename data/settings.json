@@ -1,0 +1,17 @@
+{
+  "mode": "public",
+  "premiumUsers": {},
+  "antiLink": false,
+  "antiBadWords": false,
+  "welcomeMessage": true,
+  "autoRead": true,
+  "autoBio": false,
+  "autoReact": true,
+  "autoStatusView": false,
+  "commandCooldown": 3,
+  "maxUsers": 1000,
+  "bannedUsers": [],
+  "allowedGroups": [],
+  "pluginStatus": {},
+  "lastUpdated": 1700000000000
+}
