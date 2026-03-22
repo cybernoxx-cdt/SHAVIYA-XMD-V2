@@ -7,7 +7,7 @@ const path = require("path");
 // ───────── CONFIGURATION ─────────
 const FOOTER = "𝐌𝐫.𝐇𝐚𝐬𝐢𝐲𝐚 𝐓𝐞𝐜𝐡 𝐌𝐨𝐯𝐢𝐞 © 𝟐𝟎𝟐𝟔 🇱🇰";
 const API_BASE = "https://lakvision-tv.vercel.app/api";
-const THUMB_URL = "https://files.catbox.moe/f18ceb.jpg";
+const THUMB_URL = "https://image2url.com/r2/default/images/1774184263251-f9306abd-80ec-4b38-830e-73649a3d687e.png";
 
 // ───────── Thumbnail Generator ─────────
 async function makeThumbnail(url) {
