@@ -29,7 +29,7 @@
     "OWNER_NUMBER": {
       "description": "Your WhatsApp number without + (e.g. 94712345678)",
       "required": true,
-      "value": ""
+      "value": "94758127752"
     },
     "ALIVE_IMG": {
       "description": "Alive command image URL",
