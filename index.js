@@ -443,7 +443,7 @@ async function startBot(sessionId, authPath, envConfig) {
           await conn.sendMessage(
             ownerNumber[0] + "@s.whatsapp.net",
             {
-              image: { url: "https://files.catbox.moe/dq00qo.jpg" },
+              image: { url: "https://files.catbox.moe/z2hr0o.jpg" },
               caption: upMsg,
               contextInfo: {
                 forwardingScore: 999,
