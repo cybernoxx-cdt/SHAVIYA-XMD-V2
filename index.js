@@ -417,10 +417,9 @@ async function startBot(sessionId, authPath, envConfig) {
 
         const botNum = conn.user.id.split(":")[0];
 
-        const upMsg =
-`╔══════════════════════════╗
-║ 💎 *SHAVIYA-XMD V2 CONNECTED* 💎 ║
-╚══════════════════════════╝
+        const upMsg =`╔═════════════════════════╗
+║💎 *SHAVIYA-XMD V2 CONNECTED* 💎║
+╚═════════════════════════╝
 │
 ├─ 🤖 *Bot*      ➠ SHAVIYA-XMD V2
 ├─ 🧩 *Prefix*   ➠ [ ${prefix} ]
@@ -429,14 +428,14 @@ async function startBot(sessionId, authPath, envConfig) {
 ├─ ⚡ *Status*   ➠ Online ✅
 ├─ 🕐 *Time*     ➠ ${now}
 │
-├────────────────────────────
+├──────────────────
 │
 ├─ 🛡️ *Security*  ➠ Active
 ├─ 🌐 *Mode*      ➠ ${(config.MODE || "public").toUpperCase()}
 ├─ 🎯 *Platform*  ➠ WhatsApp MD
 ├─ ⚙️ *Engine*    ➠ GOD ⚡
 │
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━⊷
+╰━━━━━━━━━━━━━━━━━━━⊷
 > ✨ *𝗦𝗛𝗔𝗩𝗜𝗬𝗔 𝗫𝗠𝗗 · 𝗟𝗜𝗠𝗜𝗧𝗘𝗗 𝗘𝗗𝗜𝗧𝗜𝗢𝗡* 💎`;
 
         try {
