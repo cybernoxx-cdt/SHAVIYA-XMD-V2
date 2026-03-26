@@ -1,129 +1,88 @@
-const { cmd } = require("../command");
+const { cmd } = require('../command');
+const config = require('../config');
+const fetch = require('node-fetch');
+const fs = require('fs');
+const path = require('path');
+const ffmpeg = require('fluent-ffmpeg');
+
+const secretvCard = {
+    key: {
+        fromMe: false,
+        participant: "0@s.whatsapp.net",
+        remoteJid: "status@broadcast"
+    },
+    message: {
+        contactMessage: {
+            displayName: "© Mr Shaviya",
+            vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:SHAVIYA-XMD V2\nORG:SHAVIYA TECH;\nTEL;type=CELL;type=VOICE;waid=94707085822:+94707085822\nEND:VCARD`
+        }
+    }
+};
 
 cmd({
     pattern: "owner",
-    desc: "Show bot owner details with contact sharing",
+    react: "🤵‍♂️",
+    desc: "Get owner contact details",
     category: "main",
-    react: "👑",
     filename: __filename
 },
-async (conn, mek, m, { from, pushname, reply }) => {
+async (conn, mek, m, { from }) => {
     try {
-        // Owner numbers with their details
-        const owners = [
-            {
-                number: "94758127752",
-                name: "GOD FATHER",
-                role: "Lead Developer",
-                country: "Sri Lanka 🇱🇰",
-                isPremium: true
-            },
-            {
-                number: "94707085822",
-                name: "Savendra Dampriya",
-                role: "Co-Developer & Support",
-                country: "Sri Lanka 🇱🇰",
-                isPremium: true
-            }
-        ];
+        const ownerNumber = config.OWNER_NUMBER || "94707085822";
+        const ownerName   = config.OWNER_NAME || "Savendra Dampriya";
+        const cleanNumber = ownerNumber.replace('+', '');
 
-        // Create contact cards for both owners
-        const contacts = owners.map(owner => ({
-            displayName: owner.name,
-            vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:${owner.name}\nORG:Shaviya Tech;\nTEL;type=CELL;type=VOICE;waid=${owner.number}:${owner.number}\nROLE:${owner.role}\nURL:https://github.com/ShaviyaTech\nNOTE:${owner.role} of SHAVIYA-XMD V2 Bot\nEND:VCARD`
-        }));
+        const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${ownerName}\nTEL;type=CELL;type=VOICE;waid=${cleanNumber}:+${cleanNumber}\nEND:VCARD`;
 
-        // Premium text with contact details
-        const premiumText = `
-╔══════════════════════════╗
-        👑 BOT OWNER 👑
-╚══════════════════════════╝
-
-👋 Hello *${pushname}*!
-
-💎 *BOT NAME* : SHAVIYA-XMD V2
-🌟 *VERSION* : Premium Edition
-⚡ *STATUS* : Active & Ready
-
-━━━━━━━━━━━━━━━━━━
-📞 *CONTACT OWNERS*
-━━━━━━━━━━━━━━━━━━
-
-👤 *OWNER 1 - ${owners[0].name}*
-├ 📱 *Number* : +${owners[0].number}
-├ 👔 *Role* : ${owners[0].role}
-└ 🌍 *Location* : ${owners[0].country}
-
-👤 *OWNER 2 - ${owners[1].name}*
-├ 📱 *Number* : +${owners[1].number}
-├ 👔 *Role* : ${owners[1].role}
-└ 🌍 *Location* : ${owners[1].country}
-
-━━━━━━━━━━━━━━━━━━
-✨ *PREMIUM FEATURES*
-━━━━━━━━━━━━━━━━━━
-✅ Unlimited Bot Usage
-✅ Priority Support 24/7
-✅ Early Access Updates
-✅ Custom Feature Requests
-✅ Exclusive Commands
-✅ No Ads/Banners
-
-━━━━━━━━━━━━━━━━━━
-💎 *CONTACT METHODS*
-━━━━━━━━━━━━━━━━━━
-1. Tap the contact cards below
-2. Click "Message" to chat directly
-3. Or save numbers to contacts
-
-*Click the contact cards to start chatting!*
-
-━━━━━━━━━━━━━━━━━━
-💬 *SUPPORT* : Available 24/7
-⚡ *RESPONSE* : Within 5-10 minutes
-🎯 *SERVICE* : Premium Support
-
-"Premium quality service with instant support"
-
-╔══════════════════════════╗
-   © POWERED BY SHAVIYA-XMD V2 💎
-   *PREMIUM EDITION*
-╚══════════════════════════╝
-`;
-
-        // Send the image with premium text
+        // 1. Send vCard contact
         await conn.sendMessage(from, {
-            image: { url: "https://files.catbox.moe/f18ceb.jpg" },
-            caption: premiumText
-        }, { quoted: mek });
+            contacts: {
+                displayName: ownerName,
+                contacts: [{ vcard }]
+            }
+        });
 
-        // Small delay before sending contacts
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        // Send each contact card
-        for (const contact of contacts) {
-            await conn.sendMessage(from, {
-                contacts: {
-                    displayName: contact.displayName,
-                    contacts: [contact]
+        // 2. Send owner info image
+        await conn.sendMessage(from, {
+            image: { url: 'https://files.catbox.moe/eqmiio.jpg' },
+            caption: `╭━━━〔 *🤵‍♂ OWNER INFO* 〕━━━⬣
+┃
+┃ 👤 *Name* : ${ownerName}
+┃ 📱 *Number* : +${cleanNumber}
+┃ 🤖 *Bot* : SHAVIYA-XMD
+┃ 🌀 *Version* : V2.0.0
+┃
+╰━━━━━━━━━━━━━━━━━━━━━⬣
+> © Powered by 𝗦𝗛𝗔𝗩𝗜𝗬𝗔-𝗫𝗠𝗗 𝗩2 🔰`,
+            contextInfo: {
+                mentionedJid: [`${cleanNumber}@s.whatsapp.net`],
+                forwardingScore: 999,
+                isForwarded: false,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: 'shavi&newsletter',
+                    newsletterName: 'SHAVIYA-XMD V4',
+                    serverMessageId: 143
                 }
-            }, { quoted: mek });
-            
-            // Small delay between contact sends
-            await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }, { quoted: secretvCard });
+
+        // 3. Send voice note
+        const voiceUrl = "https://files.catbox.moe/knemdz.mp3";
+        try {
+            const res = await fetch(voiceUrl);
+            if (res.ok) {
+                const audioBuffer = Buffer.from(await res.arrayBuffer());
+                await conn.sendMessage(from, {
+                    audio: audioBuffer,
+                    mimetype: "audio/ogg; codecs=opus",
+                    ptt: true
+                }, { quoted: mek });
+            }
+        } catch (voiceErr) {
+            console.log("[OWNER] Voice note failed:", voiceErr.message);
         }
 
-        // Send a final confirmation message
-        const finalMsg = `✅ *Contact details shared successfully!*\n\nTap on the contact cards above to message the owners directly.\n\n*Note*: Both owners are available for premium support.`;
-        
-        await conn.sendMessage(from, {
-            text: finalMsg
-        }, { quoted: mek });
-
-    } catch (e) {
-        console.log(e);
-        
-        // Fallback message if contact sharing fails
-        await reply(`❌ *Error showing owner details*\n\nContact owners directly:\n1. +94758127752 (GOD FATHER)\n2. +94707085822 (Savendra Dampriya)\n\nAdd these numbers to your contacts!`);
+    } catch (error) {
+        console.error("Owner cmd error:", error);
     }
 });
