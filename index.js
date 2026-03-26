@@ -439,7 +439,6 @@ const upMsg = `╔════════════════════�
 │  🌐 Operating Mode     :  ${(config.MODE || "PUBLIC").toUpperCase()}
 │  🎯 Platform           :  WhatsApp MD
 │  ⚡ Processing Engine  :  ULTRA FAST
-│  💾 RAM Usage          :  ${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)}MB
 │  ⏱️ Bot Uptime         :  ${runtime(process.uptime())}
 │  🚀 Response Speed     :  ${ping}ms
 ╰──────────────────────────────────────────╯
