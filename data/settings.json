@@ -1,11 +1,11 @@
 {
   "mode": "public",
   "prefix": ".",
-  "autoVoice": false,
+  "autoVoice": true,
   "autoAI": false,
   "autoTyping": false,
   "autoRecording": false,
-  "alwaysOnline": false,
+  "alwaysOnline": true,
   "autoReadStatus": false,
   "autoReadCmd": false,
   "antiLink": false,
