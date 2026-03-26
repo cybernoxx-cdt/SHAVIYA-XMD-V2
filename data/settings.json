@@ -10,7 +10,7 @@
   "autoReadCmd": false,
   "antiLink": false,
   "antiBot": false,
-  "antidelete": false,
+  "antidelete": true,
   "antiBadWords": false,
   "badWordList": [],
   "button": false,
