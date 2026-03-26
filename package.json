@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@adiwajshing/keyed-db": "6.7.0",
-    "@whiskeysockets/baileys": "7.0.0-rc.9",
+    "@whiskeysockets/baileys": "6.7.5",
     "axios": "latest",
     "express": "latest",
     "fs-extra": "latest",
