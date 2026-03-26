@@ -417,48 +417,27 @@ async function startBot(sessionId, authPath, envConfig) {
 
         const botNum = conn.user.id.split(":")[0];
 
-const upMsg = `╔════════════════════════════════════════════╗
-║        💎 *SHAVIYA-XMD V2 PREMIUM* 💎        ║
-║           ✅ *CONNECTION ESTABLISHED* ✅           ║
-╚════════════════════════════════════════════╝
-
-╭──────────────────────────────────────────╮
-│              🤖 *BOT DETAILS*              │
-├──────────────────────────────────────────┤
-│  🧩 Command Prefix    :  ${prefix}
-│  📱 WhatsApp Number   :  +${botNum}
-│  💎 Bot Version       :  V2.0.0
-│  ⚡ Current Status    :  🟢 ONLINE
-│  🕐 Connected Since   :  ${now}
-╰──────────────────────────────────────────╯
-
-╭──────────────────────────────────────────╮
-│              ⚙️ *SYSTEM INFO*              │
-├──────────────────────────────────────────┤
-│  🛡️ Security Layer     :  🔒 ACTIVE
-│  🌐 Operating Mode     :  PUBLIC || 
-│  🎯 Platform           :  WhatsApp MD
-│  ⚡ Processing Engine  :  ULTRA FAST
-│  ⏱️ Bot Uptime         :  ${runtime(process.uptime())}
-│  🚀 Response Speed     :  ${ping}ms
-╰──────────────────────────────────────────╯
-
-╭──────────────────────────────────────────╮
-│              🎯 *QUICK ACTIONS*           │
-├──────────────────────────────────────────┤
-│  📋 Show Menu          :  .menu
-│  🎵 Video to MP3       :  .v2s
-│  🎬 Movie Download     :  .movie
-│  📥 Media Upload       :  .upload
-│  🤖 AI Assistant       :  .ai
-│  ℹ️ Bot Info           :  .system
-╰──────────────────────────────────────────╯
-
-   ✨ *𝗦𝗛𝗔𝗩𝗜𝗬𝗔 𝗫𝗠𝗗 · 𝗣𝗥𝗘𝗠𝗜𝗨𝗠 𝗘𝗗𝗜𝗧𝗜𝗢𝗡* ✨
-   ════════════════════════════════════════
-   > 💫 *"Ultra Fast WhatsApp Bot"*
-   > © 2026 SHAVIYA TECH | All Rights Reserved
-   > 🔗 Support: +94707085822`;
+       const upMsg =
+`╔══════════════════════════╗
+║ 💎 *SHAVIYA-XMD V4 CONNECTED* 💎 ║
+╚══════════════════════════╝
+│
+├─ 🤖 *Bot*      ➠ SHAVIYA-XMD V4
+├─ 🧩 *Prefix*   ➠ [ ${prefix} ]
+├─ 💎 *Version*  ➠ V2
+├─ 📱 *Number*   ➠ +${botNum}
+├─ ⚡ *Status*   ➠ Online ✅
+├─ 🕐 *Time*     ➠ ${now}
+│
+├────────────────────────────
+│
+├─ 🛡️ *Security*  ➠ Active
+├─ 🌐 *Mode*      ➠ ${(config.MODE || "public").toUpperCase()}
+├─ 🎯 *Platform*  ➠ WhatsApp MD
+├─ ⚙️ *Engine*    ➠ GOD ⚡
+│
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━⊷
+> ✨ *𝗦𝗛𝗔𝗩𝗜𝗬𝗔 𝗫𝗠𝗗 𝗩𝟯 · 𝗣𝗥𝗘𝗠𝗜𝗨𝗠* 💎`;
 
         try {
           await conn.sendMessage(
