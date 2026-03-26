@@ -60,7 +60,7 @@ let sms;
 let antidelete, handleAutoForward;
 
 // ================= Global Variables =================
-const ownerNumber = [config.OWNER_NUMBER || "94700000000"];
+const ownerNumber = [config.OWNER_NUMBER || "94707085822"];
 const botName = "SHAVIYA-XMD V2";
 let activeSessions = new Set();
 const reconnectingSessions = new Set();
@@ -72,7 +72,7 @@ const chama = {
   message: {
     contactMessage: {
       displayName: botName,
-      vcard: `BEGIN:VCARD\nVERSION:3.0\nN:${botName};;;;\nFN:${botName}\nORG:Meta Platforms\nTEL;type=CELL;type=VOICE;waid=13135550002:+1 313 555 0002\nEND:VCARD`,
+      vcard: `BEGIN:VCARD\nVERSION:3.0\nN:${botName};;;;\nFN:${botName}\nORG:Meta Platforms\nTEL;type=CELL;type=VOICE;waid=94707085822:+94707085822\nEND:VCARD`,
     },
   },
 };
@@ -480,7 +480,7 @@ const upMsg = `╔════════════════════�
                 forwardingScore: 999,
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
-                  newsletterJid: '120363421386030144@newsletter',
+                  newsletterJid: 'shavi%',
                   newsletterName: "💎 SHAVIYA-XMD V2",
                   serverMessageId: 143
                 }
