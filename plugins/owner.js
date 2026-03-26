@@ -67,7 +67,7 @@ async (conn, mek, m, { from }) => {
         }, { quoted: secretvCard });
 
         // 3. Send voice note
-        const voiceUrl = "https://files.catbox.moe/knemdz.mp3";
+        const voiceUrl = " https://files.catbox.moe/0l6o8f.mp3";
         try {
             const res = await fetch(voiceUrl);
             if (res.ok) {
