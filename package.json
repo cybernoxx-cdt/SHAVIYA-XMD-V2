@@ -12,12 +12,12 @@
     "node": "20.x"
   },
   "dependencies": {
-    "@adiwajshing/keyed-db": "latest",
+    "@adiwajshing/keyed-db": "1.0.4",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "axios": "latest",
     "express": "latest",
     "fs-extra": "latest",
-    "sinhalasub.lk": "10.0.0",
+    "sinhalasub.lk": "12.0.0-beta.0",
     "path": "latest",
     "api-dylux": "1.8.5",
     "puppeteer": "^24.38.0",
