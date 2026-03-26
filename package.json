@@ -12,7 +12,7 @@
     "node": "20.x"
   },
   "dependencies": {
-    "@adiwajshing/keyed-db": "6.7.0",
+    "@adiwajshing/keyed-db": "latest",
     "@whiskeysockets/baileys": "6.7.5",
     "axios": "latest",
     "express": "latest",
