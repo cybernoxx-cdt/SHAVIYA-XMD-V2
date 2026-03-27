@@ -5,6 +5,9 @@ const axios = require('axios');
 const os = require("os");
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 const fakevCard = {
     key: {
@@ -19,6 +22,54 @@ const fakevCard = {
         }
     }
 };
+
+// ── Convert MP3 buffer → OGG/OPUS buffer ──────────────────────────
+async function convertToOpus(inputBuf) {
+    const tmpDir = path.join(__dirname, '../temp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const id = Date.now();
+    const mp3Path = path.join(tmpDir, `alive_in_${id}.mp3`);
+    const oggPath = path.join(tmpDir, `alive_out_${id}.ogg`);
+    fs.writeFileSync(mp3Path, inputBuf);
+    try {
+        // Strategy 1: system ffmpeg with libopus
+        try {
+            await execAsync(`ffmpeg -y -i "${mp3Path}" -c:a libopus -ar 48000 -ac 1 -b:a 64k "${oggPath}"`);
+            if (fs.existsSync(oggPath) && fs.statSync(oggPath).size > 100) {
+                const buf = fs.readFileSync(oggPath);
+                return { buf, mime: 'audio/ogg; codecs=opus' };
+            }
+        } catch (e1) {
+            // Strategy 2: fluent-ffmpeg
+            try {
+                const ffmpeg = require('fluent-ffmpeg');
+                try { ffmpeg.setFfmpegPath(require('@ffmpeg-installer/ffmpeg').path); } catch {}
+                await new Promise((res, rej) => {
+                    ffmpeg(mp3Path).audioCodec('libopus').audioChannels(1).audioFrequency(48000).format('ogg')
+                        .on('end', res).on('error', rej).save(oggPath);
+                });
+                if (fs.existsSync(oggPath) && fs.statSync(oggPath).size > 100) {
+                    const buf = fs.readFileSync(oggPath);
+                    return { buf, mime: 'audio/ogg; codecs=opus' };
+                }
+            } catch (e2) {
+                // Strategy 3: vorbis fallback
+                try {
+                    await execAsync(`ffmpeg -y -i "${mp3Path}" -acodec libvorbis -ar 44100 -ac 1 "${oggPath}"`);
+                    if (fs.existsSync(oggPath) && fs.statSync(oggPath).size > 100) {
+                        const buf = fs.readFileSync(oggPath);
+                        return { buf, mime: 'audio/ogg; codecs=opus' };
+                    }
+                } catch {}
+            }
+        }
+        // Fallback: send raw mp3 (some clients play this)
+        return { buf: inputBuf, mime: 'audio/mpeg' };
+    } finally {
+        try { if (fs.existsSync(mp3Path)) fs.unlinkSync(mp3Path); } catch {}
+        try { if (fs.existsSync(oggPath)) fs.unlinkSync(oggPath); } catch {}
+    }
+}
 
 // Voice note MP3 URL
 const VOICE_NOTE_URL = "https://files.catbox.moe/w9r46m.mp3";
@@ -37,12 +88,10 @@ async (robin, mek, m, {
     try {
         await robin.sendPresenceUpdate('recording', from);
 
-        // Get Sri Lankan Date & Time
-        const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo', hour12: true });
+        const now  = new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo', hour12: true });
         const date = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Colombo' });
         const time = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Colombo' });
 
-        // Stylish Alive Caption
         const status = `👋 𝐇𝐞𝐥𝐥𝐨 ${pushname}, 𝐈 𝐚𝐦 𝐚𝐥𝐢𝐯𝐞 𝐧𝐨𝐰 !!
 
 *╭─〔 DATE & TIME INFO 〕─◉*
@@ -60,7 +109,7 @@ async (robin, mek, m, {
 *│*🖊 *\`Prefix\`*: [ ${config.PREFIX} ]
 *│*🛠 *\`Mode\`*: [ ${config.MODE} ]
 *│*🖥 *\`Host\`*: ${os.hostname()}
-*│*🌀 *\`Version\`*: ${config.BOT_VERSION}
+*│*🌀 *\`Version\`*: ${config.BOT_VERSION || 'V2'}
 *╰────────────────⊷*
      
       ☘ ʙᴏᴛ ᴍᴇɴᴜ  - .menu
@@ -68,11 +117,9 @@ async (robin, mek, m, {
 
 > © Powered by 𝗦𝗛𝗔𝗩𝗜𝗬𝗔-𝗫𝗠𝗗 𝗩𝟰 💲`;
 
-        // Send Image + Caption first
+        // Send Image + Caption
         await robin.sendMessage(from, {
-            image: {
-                url: "https://files.catbox.moe/s1pn69.jpg"
-            },
+            image: { url: "https://files.catbox.moe/s1pn69.jpg" },
             caption: status,
             contextInfo: {
                 mentionedJid: [sender],
@@ -81,74 +128,31 @@ async (robin, mek, m, {
             }
         }, { quoted: mek });
 
-        // ============================================
-        // VOICE NOTE - Download from URL and Send
-        // ============================================
+        // ── VOICE NOTE ──────────────────────────────────────────────
         try {
-            // Create temp directory if not exists
-            const tmpDir = path.join(__dirname, '../temp');
-            if (!fs.existsSync(tmpDir)) {
-                fs.mkdirSync(tmpDir, { recursive: true });
-            }
-            
-            // Download voice note from URL
             console.log('[ALIVE] Downloading voice note...');
             const response = await axios.get(VOICE_NOTE_URL, {
                 responseType: 'arraybuffer',
-                timeout: 30000
+                timeout: 30000,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
             });
-            
-            const voiceBuffer = Buffer.from(response.data);
-            const voicePath = path.join(tmpDir, `voice_${Date.now()}.mp3`);
-            
-            // Save voice file
-            fs.writeFileSync(voicePath, voiceBuffer);
-            
-            console.log(`[ALIVE] Voice note downloaded: ${(voiceBuffer.length / 1024).toFixed(2)}KB`);
-            
-            // Send as voice note (PTT - Push to Talk)
+
+            const inputBuf = Buffer.from(response.data);
+            console.log(`[ALIVE] Downloaded: ${(inputBuf.length / 1024).toFixed(2)}KB — converting to opus...`);
+
+            // ✅ FIX: convert to ogg/opus so mobile WhatsApp plays it
+            const { buf: voiceBuf, mime } = await convertToOpus(inputBuf);
+
             await robin.sendMessage(from, {
-                audio: fs.readFileSync(voicePath),
-                mimetype: 'audio/mpeg',
-                ptt: true,  // This makes it a voice note
-                waveform: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] // Optional: waveform for voice note
+                audio:    voiceBuf,
+                mimetype: mime,
+                ptt:      true
             }, { quoted: fakevCard });
-            
-            // Clean up temp file
-            fs.unlinkSync(voicePath);
-            
-            console.log('[ALIVE] Voice note sent successfully');
-            
+
+            console.log('[ALIVE] Voice note sent ✅');
+
         } catch (voiceErr) {
             console.error('[ALIVE] Voice note error:', voiceErr.message);
-            
-            // Fallback: Try to send a simple beep if voice note fails
-            try {
-                const ffmpeg = require('fluent-ffmpeg');
-                const tmpDir = path.join(__dirname, '../temp');
-                const outPath = path.join(tmpDir, `beep_${Date.now()}.opus`);
-                
-                await new Promise((resolve, reject) => {
-                    ffmpeg()
-                        .input('sine=frequency=440:duration=1')
-                        .inputFormat('lavfi')
-                        .audioCodec('libopus')
-                        .format('opus')
-                        .on('end', resolve)
-                        .on('error', reject)
-                        .save(outPath);
-                });
-                
-                await robin.sendMessage(from, {
-                    audio: fs.readFileSync(outPath),
-                    mimetype: 'audio/ogg; codecs=opus',
-                    ptt: true
-                }, { quoted: fakevCard });
-                
-                fs.unlinkSync(outPath);
-            } catch (fallbackErr) {
-                console.log('[ALIVE] Fallback voice note failed:', fallbackErr.message);
-            }
         }
 
     } catch (e) {
