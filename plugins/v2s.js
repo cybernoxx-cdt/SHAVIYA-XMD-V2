@@ -62,7 +62,7 @@ cmd({
     fs.unlinkSync(outputPath);
 
     // Optional: notify success
-    await m.reply("✅ Conversion complete! MP3 sent to your inbox.");
+    await m.reply("𝗖𝗢𝗡𝗩𝗘𝗥𝗧 𝗦𝗨𝗖𝗖𝗘𝗦𝗦𝗙𝗨𝗟𝗬 💫");
   } catch (err) {
     console.error("v2s error:", err);
     m.reply("❌ Failed to convert video. Make sure the video is valid.");
