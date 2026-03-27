@@ -1,9 +1,11 @@
 const { cmd } = require('../command');
 const config = require('../config');
-const fetch = require('node-fetch');
+const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
-const ffmpeg = require('fluent-ffmpeg');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 const secretvCard = {
     key: {
@@ -18,6 +20,42 @@ const secretvCard = {
         }
     }
 };
+
+// ── Convert MP3 buffer → OGG/OPUS ──────────────────────────────────
+async function convertToOpus(inputBuf) {
+    const tmpDir = path.join(__dirname, '../temp');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const id = Date.now();
+    const mp3Path = path.join(tmpDir, `owner_in_${id}.mp3`);
+    const oggPath = path.join(tmpDir, `owner_out_${id}.ogg`);
+    fs.writeFileSync(mp3Path, inputBuf);
+    try {
+        try {
+            await execAsync(`ffmpeg -y -i "${mp3Path}" -c:a libopus -ar 48000 -ac 1 -b:a 64k "${oggPath}"`);
+            if (fs.existsSync(oggPath) && fs.statSync(oggPath).size > 100) {
+                const buf = fs.readFileSync(oggPath);
+                return { buf, mime: 'audio/ogg; codecs=opus' };
+            }
+        } catch {
+            try {
+                const ffmpeg = require('fluent-ffmpeg');
+                try { ffmpeg.setFfmpegPath(require('@ffmpeg-installer/ffmpeg').path); } catch {}
+                await new Promise((res, rej) => {
+                    ffmpeg(mp3Path).audioCodec('libopus').audioChannels(1).audioFrequency(48000).format('ogg')
+                        .on('end', res).on('error', rej).save(oggPath);
+                });
+                if (fs.existsSync(oggPath) && fs.statSync(oggPath).size > 100) {
+                    const buf = fs.readFileSync(oggPath);
+                    return { buf, mime: 'audio/ogg; codecs=opus' };
+                }
+            } catch {}
+        }
+        return { buf: inputBuf, mime: 'audio/mpeg' };
+    } finally {
+        try { if (fs.existsSync(mp3Path)) fs.unlinkSync(mp3Path); } catch {}
+        try { if (fs.existsSync(oggPath)) fs.unlinkSync(oggPath); } catch {}
+    }
+}
 
 cmd({
     pattern: "owner",
@@ -58,26 +96,24 @@ async (conn, mek, m, { from }) => {
                 mentionedJid: [`${cleanNumber}@s.whatsapp.net`],
                 forwardingScore: 999,
                 isForwarded: false,
-                forwardedNewsletterMessageInfo: {
-                    newsletterJid: 'shavi&newsletter',
-                    newsletterName: 'SHAVIYA-XMD V4',
-                    serverMessageId: 143
-                }
             }
         }, { quoted: secretvCard });
 
-        // 3. Send voice note
-        const voiceUrl = " https://files.catbox.moe/0l6o8f.mp3";
+        // 3. Send voice note — ✅ FIX: no leading space, proper opus conversion
+        const voiceUrl = "https://files.catbox.moe/0l6o8f.mp3";
         try {
-            const res = await fetch(voiceUrl);
-            if (res.ok) {
-                const audioBuffer = Buffer.from(await res.arrayBuffer());
-                await conn.sendMessage(from, {
-                    audio: audioBuffer,
-                    mimetype: "audio/ogg; codecs=opus",
-                    ptt: true
-                }, { quoted: mek });
-            }
+            const res = await axios.get(voiceUrl, {
+                responseType: 'arraybuffer',
+                timeout: 30000,
+                headers: { 'User-Agent': 'Mozilla/5.0' }
+            });
+            const inputBuf = Buffer.from(res.data);
+            const { buf: voiceBuf, mime } = await convertToOpus(inputBuf);
+            await conn.sendMessage(from, {
+                audio:    voiceBuf,
+                mimetype: mime,
+                ptt:      true
+            }, { quoted: mek });
         } catch (voiceErr) {
             console.log("[OWNER] Voice note failed:", voiceErr.message);
         }
