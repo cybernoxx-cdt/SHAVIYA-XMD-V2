@@ -42,6 +42,7 @@
     "mongoose": "8.18.1",
     "g-i-s": "latest",
     "async-g-i-s": "latest",
+    "fluent-ffmpeg": "latest",
     "getscreenshot.js": "latest",
     "@google/generative-ai": "latest",
     "xml2js": "latest",
