@@ -1,12 +1,40 @@
 const { cmd } = require("../command");
+const { execSync } = require("child_process");
 const ffmpeg = require("fluent-ffmpeg");
-const ffmpegStatic = require("ffmpeg-static");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-// Set ffmpeg path
-ffmpeg.setFfmpegPath(ffmpegStatic);
+// Try to find ffmpeg executable
+let ffmpegPath = null;
+
+// 1. Check if system ffmpeg is installed
+try {
+  execSync("which ffmpeg", { stdio: "ignore" });
+  ffmpegPath = "ffmpeg";
+  console.log("[v2s] Using system ffmpeg");
+} catch (err) {
+  // 2. Fallback to ffmpeg-static
+  try {
+    const staticPath = require("ffmpeg-static");
+    if (fs.existsSync(staticPath)) {
+      // Make it executable (just in case)
+      fs.chmodSync(staticPath, 0o755);
+      ffmpegPath = staticPath;
+      console.log("[v2s] Using ffmpeg-static at", staticPath);
+    } else {
+      console.error("[v2s] ffmpeg-static binary not found");
+    }
+  } catch (e) {
+    console.error("[v2s] ffmpeg-static not installed or not found");
+  }
+}
+
+if (!ffmpegPath) {
+  console.error("[v2s] ffmpeg not available. Please install ffmpeg or ffmpeg-static.");
+}
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 cmd({
   pattern: "v2s",
@@ -17,7 +45,10 @@ cmd({
   filename: __filename
 }, async (conn, m, match) => {
   try {
-    // Check quoted message
+    if (!ffmpegPath) {
+      return m.reply("❌ ffmpeg is not installed on this bot. Please ask the bot owner to install it.");
+    }
+
     if (!m.quoted) {
       return m.reply("🎥 Reply to a video message to convert to MP3.");
     }
@@ -33,14 +64,14 @@ cmd({
       videoBuffer = await m.quoted.download();
     } catch (downloadErr) {
       console.error("Download error:", downloadErr);
-      return m.reply("❌ Could not download the video. Make sure it's not a view-once message and is accessible.");
+      return m.reply("❌ Could not download the video. Make sure it's not a view-once message.");
     }
 
     if (!videoBuffer || videoBuffer.length === 0) {
       return m.reply("❌ Downloaded video is empty.");
     }
 
-    // Create a temporary directory (system temp folder + unique name)
+    // Create temp directory
     const tempDir = path.join(os.tmpdir(), "wa_bot_v2s");
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
@@ -92,7 +123,7 @@ cmd({
       console.warn("Cleanup error:", cleanErr);
     }
 
-    // No extra text messages – only the audio is sent
+    // No extra text – only the audio
   } catch (err) {
     console.error("Unexpected error in v2s:", err);
     m.reply(`❌ Unexpected error: ${err.message || "Please check the bot logs"}`);
