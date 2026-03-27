@@ -86,7 +86,7 @@ cmd({
     fs.unlinkSync(inputPath);
     fs.unlinkSync(outputPath);
 
-    await m.reply("✅ Sticker created and sent to your inbox!");
+    await m.reply("✅");
   } catch (err) {
     console.error("Sticker error:", err);
     m.reply("❌ Failed to create sticker. Make sure the media is valid.");
