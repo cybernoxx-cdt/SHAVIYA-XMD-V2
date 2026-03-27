@@ -12,8 +12,8 @@
     "node": "20.x"
   },
   "dependencies": {
-    "@adiwajshing/keyed-db": "latest",
-    "@whiskeysockets/baileys": "7.0.0-rc.9",
+    "@adiwajshing/keyed-db": "^0.2.4",
+    "@whiskeysockets/baileys": "^6.7.16",
     "axios": "latest",
     "express": "latest",
     "fs-extra": "^11.1.0",
