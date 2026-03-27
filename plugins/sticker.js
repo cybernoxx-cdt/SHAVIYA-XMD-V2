@@ -1,94 +1,101 @@
-const { cmd } = require("../command");
-const sharp = require("sharp");
-const ffmpeg = require("fluent-ffmpeg");
-const ffmpegPath = require("ffmpeg-static");
-const fs = require("fs");
-const path = require("path");
+const { cmd } = require('../command');
+const crypto = require('crypto');
+const webp = require('node-webpmux');
+const axios = require('axios');
+const fs = require('fs-extra');
+const { exec } = require('child_process');
+const { Sticker, createSticker, StickerTypes } = require("wa-sticker-formatter");
+const Config = require('../config');
 
-ffmpeg.setFfmpegPath(ffmpegPath);
-
-cmd({
-  pattern: "sticker",
-  alias: ["s", "sticker", "to sticker"],
-  react: "🎨",
-  desc: "Convert image/video to sticker",
-  category: "tools",
-  filename: __filename
-}, async (conn, m, match) => {
-  try {
-    // Check if a message is quoted
-    if (!m.quoted) return m.reply("🎨 Reply to an image or video to convert to sticker.");
-
-    const type = m.quoted.type;
-    if (type !== "imageMessage" && type !== "videoMessage") {
-      return m.reply("❌ Please reply to an **image** or **video** message.");
+// Fake vCard
+const fakevCard = {
+    key: {
+        fromMe: false,
+        participant: "0@s.whatsapp.net",
+        remoteJid: "status@broadcast"
+    },
+    message: {
+        contactMessage: {
+            displayName: "© Mr Shaviya",
+            vcard: `BEGIN:VCARD
+VERSION:3.0
+FN:Meta
+ORG:META AI;
+TEL;type=CELL;type=VOICE;waid=94707085822:+94707085822
+END:VCARD`
+        }
     }
+};
+// Take Sticker 
 
-    await m.reply("⏳ Converting to sticker...");
+cmd(
+    {
+        pattern: 'take',
+        alias: ['rename', 'stake'],
+        react: "🔮",
+        desc: 'Create a sticker with a custom pack name.',
+        category: 'sticker',
+        use: '<reply media or URL>',
+        filename: __filename,
+    },
+    async (conn, mek, m, { quoted, args, q, reply, from }) => {
+        if (!mek.quoted) return reply(`*Reply to any sticker.*`);
+        if (!q) return reply(`*Please provide a pack name using .take <packname>*`);
 
-    // Create temporary directory if it doesn't exist
-    const tempDir = path.join(__dirname, "../temp");
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+        let mime = mek.quoted.mtype;
+        let pack = q;
 
-    const download = await m.quoted.download();
-    let inputPath, outputPath;
-
-    if (type === "imageMessage") {
-      // Process image directly
-      inputPath = path.join(tempDir, `sticker_input_${Date.now()}.jpg`);
-      fs.writeFileSync(inputPath, download);
-
-      outputPath = path.join(tempDir, `sticker_output_${Date.now()}.webp`);
-
-      await sharp(inputPath)
-        .resize(512, 512, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .webp()
-        .toFile(outputPath);
-
-      const stickerBuffer = fs.readFileSync(outputPath);
-      await conn.sendMessage(m.sender, { sticker: stickerBuffer });
-    } 
-    else if (type === "videoMessage") {
-      // Extract first frame from video
-      inputPath = path.join(tempDir, `sticker_video_${Date.now()}.mp4`);
-      fs.writeFileSync(inputPath, download);
-
-      const framePath = path.join(tempDir, `sticker_frame_${Date.now()}.png`);
-      outputPath = path.join(tempDir, `sticker_output_${Date.now()}.webp`);
-
-      // Extract first frame using ffmpeg
-      await new Promise((resolve, reject) => {
-        ffmpeg(inputPath)
-          .screenshots({
-            timestamps: ["0"],
-            filename: path.basename(framePath),
-            folder: tempDir,
-            size: "512x512"
-          })
-          .on("end", resolve)
-          .on("error", reject);
-      });
-
-      // Convert the extracted PNG to WebP sticker
-      await sharp(framePath)
-        .resize(512, 512, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .webp()
-        .toFile(outputPath);
-
-      const stickerBuffer = fs.readFileSync(outputPath);
-      await conn.sendMessage(m.sender, { sticker: stickerBuffer });
-
-      // Clean up frame file
-      fs.unlinkSync(framePath);
+        if (mime === "imageMessage" || mime === "stickerMessage") {
+            let media = await mek.quoted.download();
+            let sticker = new Sticker(media, {
+                pack: pack, 
+                type: StickerTypes.FULL,
+                categories: ["🤩", "🎉"],
+                id: "12345",
+                quality: 75,
+                background: 'transparent',
+            });
+            const buffer = await sticker.toBuffer();
+            return conn.sendMessage(mek.chat, { sticker: buffer }, { quoted: fakevCard });
+        } else {
+            return reply("*Uhh, Please reply to an image.*");
+        }
     }
+);
 
-    // Clean up temporary files
-    fs.unlinkSync(inputPath);
-    fs.unlinkSync(outputPath);
+//Sticker create 
 
-    await m.reply("✅");
-  } catch (err) {
-    console.error("Sticker error:", err);
-    m.reply("❌ Failed to create sticker. Make sure the media is valid.");
-  }
-});
+cmd(
+    {
+        pattern: 'sticker',
+        alias: ['s', 'stickergif'],
+        react: "🔮",
+        desc: 'Create a sticker from an image, video, or URL.',
+        category: 'sticker',
+        use: '<reply media or URL>',
+        filename: __filename,
+    },
+    async (conn, mek, m, { quoted, args, q, reply, from }) => {
+        if (!mek.quoted) return reply(`*Reply to any Image or Video, Sir.*`);
+        let mime = mek.quoted.mtype;
+        let pack = Config.STICKER_NAME || "Jawad TechX";
+        
+        if (mime === "imageMessage" || mime === "stickerMessage") {
+            let media = await mek.quoted.download();
+            let sticker = new Sticker(media, {
+                pack: pack, 
+                type: StickerTypes.FULL,
+                categories: ["🤩", "🎉"], 
+                id: "12345",
+                quality: 75, 
+                background: 'transparent',
+            });
+            const buffer = await sticker.toBuffer();
+            return conn.sendMessage(mek.chat, { sticker: buffer }, { quoted: fakevCard });
+        } else {
+            return reply("*Uhh, Please reply to an image.*");
+        }
+    }
+);
+
+// JawadTechX
