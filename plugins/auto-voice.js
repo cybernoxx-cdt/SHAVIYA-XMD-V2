@@ -1,9 +1,8 @@
 // ============================================
 //   plugins/auto-reactions.js - SHAVIYA-XMD V4
 //   Auto Voice + Auto Sticker + Auto Reply
-//   ONE switch — .autovoice on/off controls ALL
-//   ✅ REAL PTT Voice Note — generateWAMessageFromContent
-//   ✅ iOS + Android + All devices
+//   ✅ ffmpeg-static — no system ffmpeg needed
+//   ✅ Works on Heroku / Railway / Render
 // ============================================
 
 'use strict';
@@ -13,11 +12,14 @@ const path   = require('path');
 const axios  = require('axios');
 const ffmpeg = require('fluent-ffmpeg');
 
+// ✅ Use bundled ffmpeg-static — no system install needed
+const ffmpegPath = require('ffmpeg-static');
+ffmpeg.setFfmpegPath(ffmpegPath);
+
 const {
     generateWAMessageFromContent,
     proto,
     prepareWAMessageMedia,
-    generateWAMessageContent,
 } = require('@whiskeysockets/baileys');
 
 const { cmd }                               = require('../command');
@@ -40,8 +42,8 @@ function loadJson(filePath) {
 }
 
 // ══════════════════════════════════════════════
-//   Convert ANY audio → proper OGG Opus buffer
-//   ✅ Always re-encode via FFmpeg
+//   Convert ANY audio → OGG Opus buffer
+//   ✅ Uses ffmpeg-static (bundled)
 // ══════════════════════════════════════════════
 async function toOpusBuffer(audioUrl) {
     const ext       = (audioUrl.split('?')[0].split('.').pop()) || 'mp3';
@@ -78,39 +80,31 @@ async function toOpusBuffer(audioUrl) {
 
 // ══════════════════════════════════════════════
 //   Send REAL PTT Voice Note
-//   Uses generateWAMessageFromContent + relayMessage
-//   ✅ This is the ONLY method that works in Baileys
 // ══════════════════════════════════════════════
 async function sendVoiceNote(conn, jid, audioBuffer, quotedMsg) {
-    // Step 1: Upload audio to WhatsApp servers
     const uploaded = await prepareWAMessageMedia(
         { audio: audioBuffer, mimetype: 'audio/ogg; codecs=opus', ptt: true },
         { upload: conn.waUploadToServer }
     );
 
-    // Step 2: Build proper PTT message
     const msg = generateWAMessageFromContent(
         jid,
         {
             audioMessage: {
                 ...uploaded.audioMessage,
-                ptt: true,                          // ✅ THIS makes it a voice note
+                ptt: true,
                 mimetype: 'audio/ogg; codecs=opus',
             }
         },
-        {
-            quoted: quotedMsg,
-            userJid: conn.user?.id
-        }
+        { quoted: quotedMsg, userJid: conn.user?.id }
     );
 
-    // Step 3: Relay — same method used by index.js for buttons
     await conn.relayMessage(jid, msg.message, { messageId: msg.key.id });
     return msg;
 }
 
 // ══════════════════════════════════════════════
-//   .autovoice on/off — controls ALL 3
+//   .autovoice on/off
 // ══════════════════════════════════════════════
 cmd({
     pattern:  'autovoice',
@@ -177,14 +171,8 @@ async (robin, mek, m, { from, body, isOwner }) => {
             const voiceData = loadJson(VOICE_FILE);
             for (const text in voiceData) {
                 if (bodyLower === text.trim().toLowerCase()) {
-                    const audioUrl = voiceData[text];
-
                     await robin.sendPresenceUpdate('recording', from);
-
-                    // ✅ Convert → OGG Opus buffer
-                    const audioBuffer = await toOpusBuffer(audioUrl);
-
-                    // ✅ Send as REAL PTT voice note
+                    const audioBuffer = await toOpusBuffer(voiceData[text]);
                     await sendVoiceNote(robin, from, audioBuffer, mek);
                     break;
                 }
