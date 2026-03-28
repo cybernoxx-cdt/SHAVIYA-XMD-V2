@@ -2,17 +2,25 @@
 //   plugins/auto-reactions.js - SHAVIYA-XMD V4
 //   Auto Voice + Auto Sticker + Auto Reply
 //   ONE switch — .autovoice on/off controls ALL
-//   ✅ iOS + Android + All devices compatible
-//   ✅ "no longer available" fix applied
+//   ✅ REAL PTT Voice Note — generateWAMessageFromContent
+//   ✅ iOS + Android + All devices
 // ============================================
 
 'use strict';
 
-const fs      = require('fs');
-const path    = require('path');
-const axios   = require('axios');
-const ffmpeg  = require('fluent-ffmpeg');
-const { cmd }             = require('../command');
+const fs     = require('fs');
+const path   = require('path');
+const axios  = require('axios');
+const ffmpeg = require('fluent-ffmpeg');
+
+const {
+    generateWAMessageFromContent,
+    proto,
+    prepareWAMessageMedia,
+    generateWAMessageContent,
+} = require('@whiskeysockets/baileys');
+
+const { cmd }                               = require('../command');
 const { getSetting, setSetting, getConfig } = require('../lib/settings');
 
 // ── File paths ────────────────────────────────
@@ -21,7 +29,6 @@ const STICKER_FILE = path.join(__dirname, '../ranumitha_data/autosticker.json');
 const REPLY_FILE   = path.join(__dirname, '../ranumitha_data/autoreply.json');
 const TMP_DIR      = path.join(__dirname, '../ranumitha_data/tmp');
 
-// ── Ensure tmp dir exists ─────────────────────
 if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
 
 // ── Safe JSON loader ──────────────────────────
@@ -29,56 +36,77 @@ function loadJson(filePath) {
     try {
         if (!fs.existsSync(filePath)) return {};
         return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    } catch (e) { return {}; }
+    } catch { return {}; }
 }
 
 // ══════════════════════════════════════════════
-//   Convert ANY audio URL → WhatsApp voice note
-//   ✅ ALWAYS re-encode through FFmpeg
-//   ✅ Fixes "This message is no longer available"
-//   ✅ iOS + Android + all devices
+//   Convert ANY audio → proper OGG Opus buffer
+//   ✅ Always re-encode via FFmpeg
 // ══════════════════════════════════════════════
-async function toWhatsAppAudio(audioUrl) {
-    const ext       = (audioUrl.toLowerCase().split('?')[0].split('.').pop()) || 'mp3';
+async function toOpusBuffer(audioUrl) {
+    const ext       = (audioUrl.split('?')[0].split('.').pop()) || 'mp3';
     const tmpInput  = path.join(TMP_DIR, `in_${Date.now()}.${ext}`);
     const tmpOutput = path.join(TMP_DIR, `out_${Date.now()}.ogg`);
 
     try {
-        // Step 1: Download the audio file
-        const response = await axios.get(audioUrl, {
+        const res = await axios.get(audioUrl, {
             responseType: 'arraybuffer',
             timeout: 20000,
             headers: { 'User-Agent': 'Mozilla/5.0' }
         });
-        fs.writeFileSync(tmpInput, Buffer.from(response.data));
+        fs.writeFileSync(tmpInput, Buffer.from(res.data));
 
-        // Step 2: ALWAYS re-encode → fixes header/container issues
-        // that cause "no longer available" on WhatsApp
         await new Promise((resolve, reject) => {
             ffmpeg(tmpInput)
                 .audioCodec('libopus')
                 .audioBitrate('64k')
                 .audioFrequency(48000)
                 .audioChannels(1)
-                .outputOptions([
-                    '-f ogg',
-                    '-avoid_negative_ts make_zero',
-                    '-fflags +bitexact'
-                ])
+                .outputOptions(['-f ogg', '-avoid_negative_ts make_zero'])
                 .output(tmpOutput)
                 .on('end', resolve)
-                .on('error', (err) => reject(err))
+                .on('error', reject)
                 .run();
         });
 
-        // Step 3: Return as buffer
         return fs.readFileSync(tmpOutput);
-
     } finally {
-        // Always cleanup tmp files
         try { if (fs.existsSync(tmpInput))  fs.unlinkSync(tmpInput);  } catch {}
         try { if (fs.existsSync(tmpOutput)) fs.unlinkSync(tmpOutput); } catch {}
     }
+}
+
+// ══════════════════════════════════════════════
+//   Send REAL PTT Voice Note
+//   Uses generateWAMessageFromContent + relayMessage
+//   ✅ This is the ONLY method that works in Baileys
+// ══════════════════════════════════════════════
+async function sendVoiceNote(conn, jid, audioBuffer, quotedMsg) {
+    // Step 1: Upload audio to WhatsApp servers
+    const uploaded = await prepareWAMessageMedia(
+        { audio: audioBuffer, mimetype: 'audio/ogg; codecs=opus', ptt: true },
+        { upload: conn.waUploadToServer }
+    );
+
+    // Step 2: Build proper PTT message
+    const msg = generateWAMessageFromContent(
+        jid,
+        {
+            audioMessage: {
+                ...uploaded.audioMessage,
+                ptt: true,                          // ✅ THIS makes it a voice note
+                mimetype: 'audio/ogg; codecs=opus',
+            }
+        },
+        {
+            quoted: quotedMsg,
+            userJid: conn.user?.id
+        }
+    );
+
+    // Step 3: Relay — same method used by index.js for buttons
+    await conn.relayMessage(jid, msg.message, { messageId: msg.key.id });
+    return msg;
 }
 
 // ══════════════════════════════════════════════
@@ -153,19 +181,11 @@ async (robin, mek, m, { from, body, isOwner }) => {
 
                     await robin.sendPresenceUpdate('recording', from);
 
-                    // ✅ Convert to proper OGG Opus buffer
-                    // This fixes "no longer available" error on all devices
-                    const audioBuffer = await toWhatsAppAudio(audioUrl);
+                    // ✅ Convert → OGG Opus buffer
+                    const audioBuffer = await toOpusBuffer(audioUrl);
 
-                    await robin.sendMessage(
-                        from,
-                        {
-                            audio: audioBuffer,
-                            mimetype: 'audio/ogg; codecs=opus',
-                            ptt: true
-                        },
-                        { quoted: mek }
-                    );
+                    // ✅ Send as REAL PTT voice note
+                    await sendVoiceNote(robin, from, audioBuffer, mek);
                     break;
                 }
             }
