@@ -427,26 +427,26 @@ async function startBot(sessionId, authPath, envConfig) {
         const botNum = conn.user.id.split(":")[0];
 
        const upMsg =
-`╔══════════════════════════╗
-║ 💎 *SHAVIYA-XMD V4 CONNECTED* 💎 ║
-╚══════════════════════════╝
+`╔════════════════════════╗
+║ ❤️‍🔥 *SHAVIYA-XMD V2 CONNECTED* 💫 ║
+╚════════════════════════╝
 │
-├─ 🤖 *Bot*      ➠ SHAVIYA-XMD V4
+├─ 🤖 *Bot*      ➠ SHAVIYA-XMD V2
 ├─ 🧩 *Prefix*   ➠ [ ${prefix} ]
 ├─ 💎 *Version*  ➠ V2
 ├─ 📱 *Number*   ➠ +${botNum}
 ├─ ⚡ *Status*   ➠ Online ✅
 ├─ 🕐 *Time*     ➠ ${now}
 │
-├────────────────────────────
+├─────────────────────────
 │
 ├─ 🛡️ *Security*  ➠ Active
 ├─ 🌐 *Mode*      ➠ ${(config.MODE || "public").toUpperCase()}
-├─ 🎯 *Platform*  ➠ WhatsApp MD
+├─ 🎯 *Platform*  ➠ ʜᴇʀᴏᴋᴜ
 ├─ ⚙️ *Engine*    ➠ GOD ⚡
 │
-╰━━━━━━━━━━━━━━━━━━━━━━━━━━━⊷
-> ✨ *𝗦𝗛𝗔𝗩𝗜𝗬𝗔 𝗫𝗠𝗗 𝗩𝟯 · 𝗣𝗥𝗘𝗠𝗜𝗨𝗠* 💎`;
+╰━━━━━━━━━━━━━━━━━━━━━━━━⊷
+> ✨ *𝗦𝗛𝗔𝗩𝗜𝗬𝗔 𝗫𝗠𝗗 𝗩2 · 𝗣𝗥𝗘𝗠𝗜𝗨𝗠* 💎`;
 
         try {
           await conn.sendMessage(
@@ -459,7 +459,7 @@ async function startBot(sessionId, authPath, envConfig) {
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
                   newsletterJid: 'shavi%',
-                  newsletterName: "💎 SHAVIYA-XMD V2",
+                  newsletterName: "💫 SHAVIYA-XMD V2",
                   serverMessageId: 143
                 }
               }
