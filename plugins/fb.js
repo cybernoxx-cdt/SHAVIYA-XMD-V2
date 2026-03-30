@@ -107,7 +107,7 @@ cmd(
 
       // Quality buttons build
       const qualityButtons = [];
-      let bodyText = `🔵 *𝐇𝐀𝐒𝐈𝐘𝐀-𝐌𝐃 𝐅𝐁 𝐃𝐋*\n\n🎬 *Title:* ${title}\n\n*Quality එක තෝරන්න:*\n`;
+      let bodyText = `🔵 *𝐒𝐇𝐀𝐕𝐈𝐘𝐀-𝐗𝐌𝐃 𝐅𝐁 𝐃𝐋*\n\n🎬 *Title:* ${title}\n\n*Quality එක තෝරන්න:*\n`;
 
       if (data.video_hd) {
         qualityButtons.push({ id: "1", text: "1️⃣ High Quality (HD)" });
@@ -122,7 +122,7 @@ cmd(
       const sentQual = await global.sendInteractiveButtons(bot, from, {
         header: "🔵 FB Downloader",
         body: bodyText,
-        footer: "𝐇𝐀𝐒𝐈𝐘𝐀-𝐌𝐃",
+        footer: "𝐒𝐇𝐀𝐕𝐈𝐘𝐀-𝐗𝐌𝐃",
         buttons: qualityButtons,
         _sessionId: sessionId
       }, mek);
