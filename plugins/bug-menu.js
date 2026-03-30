@@ -1,223 +1,274 @@
-// Bug Menu Plugin - All Bug Commands Menu
+// Bug Menu Plugin - Displays all bug commands
 
 const moment = require('moment-timezone');
 
 class BugMenuPlugin {
-    constructor(config, client) {
+    constructor(config, manager) {
+        this.name = 'bug-menu';
+        this.version = '2.0.0';
+        this.category = 'menu';
+        this.author = 'Chalana Induwara';
         this.config = config;
-        this.client = client;
-        this.menuType = 'bug';
-        this.categories = {
-            spam: ['msgblock', 'pairspam', 'callspam'],
-            exploit: ['locationbug', 'vcardbug', 'ghostbug', 'catalogbug'],
-            group: ['destroyer'],
-            system: ['status', 'logs']
+        this.manager = manager;
+        
+        this.commands = {
+            'bugmenu': this.bugMenu.bind(this),
+            'bughelp': this.bugHelp.bind(this),
+            'buginfo': this.bugInfo.bind(this)
+        };
+        
+        this.descriptions = {
+            'bugmenu': 'Show all bug commands menu',
+            'bughelp': 'Get detailed help for bug commands',
+            'buginfo': 'Show plugin information'
         };
     }
-
-    getMenuText(prefix, userNumber, isGroup) {
-        const date = moment().tz(this.config.timezone || 'Asia/Colombo').format('YYYY-MM-DD');
-        const time = moment().tz(this.config.timezone || 'Asia/Colombo').format('HH:mm:ss');
-
-        return `
+    
+    async bugMenu(sock, msg, args, from, isGroup, sender, pushname, reply) {
+        const date = moment().tz(this.config.timezone).format('YYYY-MM-DD');
+        const time = moment().tz(this.config.timezone).format('HH:mm:ss');
+        
+        const menuText = `
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃    ☣️ *BUG COMMANDS MENU* ☣️
+┃    ☣️ *CHALAH BUG MENU* ☣️
 ┃    ═══════════════════════════════
 ┃
-┃  👤 *USER:* @${userNumber.split('@')[0]}
+┃  👤 *USER:* @${sender.split('@')[0]}
 ┃  📅 *DATE:* ${date}
 ┃  ⌚ *TIME:* ${time}
-┃  🚀 *PREFIX:* ${prefix}
+┃  🚀 *PREFIX:* ${this.config.prefix}
 ┃
 ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
 ┃
 ┃  ☢️ *[ SPAM ATTACKS ]*
 ┃  ┌─────────────────────────────────
-┃  │ ☣️ ${prefix}msgblock [number]
-┃  │    └─> Message block attack
-┃  │
-┃  │ ☣️ ${prefix}pairspam [number]
-┃  │    └─> Pairing code spam
-┃  │
-┃  │ ☣️ ${prefix}callspam [number]
-┃  │    └─> Call request spam
+┃  │ ☣️ ${this.config.prefix}msgblock [number]
+┃  │ ☣️ ${this.config.prefix}pairspam [number] [count]
+┃  │ ☣️ ${this.config.prefix}callspam [number] [count]
+┃  │ ☣️ ${this.config.prefix}groupspam [count] [message]
 ┃  └─────────────────────────────────
 ┃
 ┃  💀 *[ EXPLOIT ATTACKS ]*
 ┃  ┌─────────────────────────────────
-┃  │ ☣️ ${prefix}locationbug [number]
-┃  │    └─> Location payload spam
-┃  │
-┃  │ ☣️ ${prefix}vcardbug [number]
-┃  │    └─> VCard overflow attack
-┃  │
-┃  │ ☣️ ${prefix}ghostbug [number]
-┃  │    └─> Ghost message attack
-┃  │
-┃  │ ☣️ ${prefix}catalogbug [number]
-┃  │    └─> Catalog payload attack
+┃  │ ☣️ ${this.config.prefix}locationbug [number] [count]
+┃  │ ☣️ ${this.config.prefix}vcardbug [number]
+┃  │ ☣️ ${this.config.prefix}ghostbug [number]
+┃  │ ☣️ ${this.config.prefix}catalogbug [number]
+┃  │ ☣️ ${this.config.prefix}videobug [number]
+┃  │ ☣️ ${this.config.prefix}audiobug [number]
+┃  │ ☣️ ${this.config.prefix}documentbug [number]
 ┃  └─────────────────────────────────
 ┃
 ┃  🔥 *[ GROUP ATTACKS ]*
 ┃  ┌─────────────────────────────────
-┃  │ ☣️ ${prefix}destroyer
-┃  │    └─> Group mention spam
-┃  │
-┃  │ ☣️ ${prefix}groupspam
-┃  │    └─> Group message spam
+┃  │ ☣️ ${this.config.prefix}destroyer
+┃  │ ☣️ ${this.config.prefix}groupspam [count] [msg]
 ┃  └─────────────────────────────────
 ┃
 ┃  ⚡ *[ ADVANCED ]*
 ┃  ┌─────────────────────────────────
-┃  │ ☣️ ${prefix}multibug [number]
-┃  │    └─> Multi-attack combo
-┃  │
-┃  │ ☣️ ${prefix}bugstatus
-┃  │    └─> Bug attack status
-┃  │
-┃  │ ☣️ ${prefix}stopattack
-┃  │    └─> Stop ongoing attack
+┃  │ ☣️ ${this.config.prefix}multibug [number]
+┃  │ ☣️ ${this.config.prefix}bugstatus
+┃  │ ☣️ ${this.config.prefix}stopattack
+┃  │ ☣️ ${this.config.prefix}bughelp [command]
 ┃  └─────────────────────────────────
 ┃
 ┃  📊 *[ STATISTICS ]*
 ┃  ┌─────────────────────────────────
-┃  │ 📈 Total attacks: ${this.getTotalAttacks()}
-┃  │ 👥 Victims: ${this.getVictimCount()}
-┃  │ ⏱️ Active attacks: ${this.getActiveAttacks()}
+┃  │ 📈 ${this.config.prefix}bugstatus
+┃  │ 📋 ${this.config.prefix}buginfo
 ┃  └─────────────────────────────────
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃
+┃  ⚙️ *SYSTEM STATUS:*
+┃  ✅ Active Attacks: ${this.getActiveAttacks()}
+┃  🎯 Total Attacks: ${this.getTotalAttacks()}
+┃  👥 Total Victims: ${this.getVictimCount()}
+┃  🛡️ Mode: ${this.config.mode}
 ┃
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-⚠️ *WARNING:* Use these commands responsibly!
-⚙️ *Status:* Active
-🎯 *Mode:* ${this.config.mode || 'Public'}
-
-*Powered by CHALAH VOID SYSTEM v2.0*
-        `.trim();
-    }
-
-    getTotalAttacks() {
-        // Implement attack counter
-        return global.attackCounter || 0;
-    }
-
-    getVictimCount() {
-        // Implement victim counter
-        return Object.keys(global.victims || {}).length;
-    }
-
-    getActiveAttacks() {
-        // Implement active attacks counter
-        return global.activeAttacks || 0;
-    }
-
-    async execute(sock, msg, args, from, isGroup, sender, pushname, reply) {
-        const menuText = this.getMenuText(this.config.prefix, sender, isGroup);
+💀 *CHALAH VOID SYSTEM v2.0*
+📱 Type ${this.config.prefix}bughelp [command] for details
+        `;
         
-        if (args[0] === 'full') {
-            // Send full detailed menu
-            await sock.sendMessage(from, {
-                image: { url: this.config.logo },
-                caption: menuText,
-                contextInfo: {
-                    mentionedJid: [sender],
-                    forwardingScore: 999,
-                    isForwarded: true,
-                    forwardedNewsletterMessageInfo: {
-                        newsletterJid: '120363304428340577@newsletter',
-                        newsletterName: 'CHALAH VOID',
-                        serverMessageId: 69
-                    }
-                }
-            });
-        } else {
-            // Send compact menu
-            await sock.sendMessage(from, {
-                text: menuText,
-                contextInfo: {
-                    mentionedJid: [sender]
-                }
-            });
-        }
+        await sock.sendMessage(from, {
+            image: { url: this.config.logo },
+            caption: menuText,
+            contextInfo: {
+                mentionedJid: [sender],
+                forwardingScore: 999,
+                isForwarded: true
+            }
+        });
     }
-
-    async getDetailedHelp(command, sock, from, reply) {
+    
+    async bugHelp(sock, msg, args, from, isGroup, sender, pushname, reply) {
+        if (!args[0]) {
+            return reply(`❌ *Usage:* ${this.config.prefix}bughelp [command]\n📝 *Example:* ${this.config.prefix}bughelp msgblock`);
+        }
+        
+        const command = args[0].toLowerCase();
         const helpTexts = {
             msgblock: `📖 *MSG BLOCK ATTACK*
 ━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}msgblock [number]
+💠 *Command:* ${this.config.prefix}msgblock
+📝 *Usage:* ${this.config.prefix}msgblock [number]
 🎯 *Effect:* Sends heavy payload to crash chat
 ⚡ *Duration:* Instant
 ⚠️ *Risk:* High
-📝 *Example:* ${this.config.prefix}msgblock 94712345678`,
+📌 *Example:* ${this.config.prefix}msgblock 94712345678`,
 
             pairspam: `📖 *PAIRING SPAM*
 ━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}pairspam [number]
+💠 *Command:* ${this.config.prefix}pairspam
+📝 *Usage:* ${this.config.prefix}pairspam [number] [count]
 🎯 *Effect:* Spams pairing requests
-⚡ *Duration:* 50 requests
+⚡ *Duration:* Configurable (max 100)
 ⚠️ *Risk:* Medium
-📝 *Example:* ${this.config.prefix}pairspam 94712345678`,
+📌 *Example:* ${this.config.prefix}pairspam 94712345678 50`,
 
             callspam: `📖 *CALL SPAM*
 ━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}callspam [number]
+💠 *Command:* ${this.config.prefix}callspam
+📝 *Usage:* ${this.config.prefix}callspam [number] [count]
 🎯 *Effect:* Spams call requests
-⚡ *Duration:* 20 calls
+⚡ *Duration:* Configurable (max 50)
 ⚠️ *Risk:* Medium
-📝 *Example:* ${this.config.prefix}callspam 94712345678`,
+📌 *Example:* ${this.config.prefix}callspam 94712345678 20`,
 
             locationbug: `📖 *LOCATION BUG*
 ━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}locationbug [number]
+💠 *Command:* ${this.config.prefix}locationbug
+📝 *Usage:* ${this.config.prefix}locationbug [number] [count]
 🎯 *Effect:* Sends location payload spam
-⚡ *Duration:* 5 locations
+⚡ *Duration:* Configurable (max 10)
 ⚠️ *Risk:* High
-📝 *Example:* ${this.config.prefix}locationbug 94712345678`,
+📌 *Example:* ${this.config.prefix}locationbug 94712345678 5`,
 
             vcardbug: `📖 *VCARD BUG*
 ━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}vcardbug [number]
+💠 *Command:* ${this.config.prefix}vcardbug
+📝 *Usage:* ${this.config.prefix}vcardbug [number]
 🎯 *Effect:* VCard overflow attack
 ⚡ *Duration:* Instant
 ⚠️ *Risk:* Critical
-📝 *Example:* ${this.config.prefix}vcardbug 94712345678`,
+📌 *Example:* ${this.config.prefix}vcardbug 94712345678`,
 
             ghostbug: `📖 *GHOST BUG*
 ━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}ghostbug [number]
+💠 *Command:* ${this.config.prefix}ghostbug
+📝 *Usage:* ${this.config.prefix}ghostbug [number]
 🎯 *Effect:* Invisible character spam
-⚡ *Duration:* 50k chars
-⚠️ *Risk:* Medium
-📝 *Example:* ${this.config.prefix}ghostbug 94712345678`,
-
-            catalogbug: `📖 *CATALOG BUG*
-━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}catalogbug [number]
-🎯 *Effect:* Shop message overflow
 ⚡ *Duration:* Instant
-⚠️ *Risk:* High
-📝 *Example:* ${this.config.prefix}catalogbug 94712345678`,
+⚠️ *Risk:* Medium
+📌 *Example:* ${this.config.prefix}ghostbug 94712345678`,
 
             destroyer: `📖 *GROUP DESTROYER*
 ━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}destroyer
+💠 *Command:* ${this.config.prefix}destroyer
+📝 *Usage:* ${this.config.prefix}destroyer
 🎯 *Effect:* Spam mentions all members
 ⚡ *Duration:* Instant
 ⚠️ *Risk:* Very High
-📝 *Note:* Use only in groups`,
+📌 *Note:* Use only in groups`,
 
             multibug: `📖 *MULTI BUG COMBO*
 ━━━━━━━━━━━━━━━━━
-💠 *Usage:* ${this.config.prefix}multibug [number]
+💠 *Command:* ${this.config.prefix}multibug
+📝 *Usage:* ${this.config.prefix}multibug [number]
 🎯 *Effect:* All attacks combined
-⚡ *Duration:* Configurable
+⚡ *Duration:* ~30 seconds
 ⚠️ *Risk:* Critical
-📝 *Example:* ${this.config.prefix}multibug 94712345678`
-        };
+📌 *Example:* ${this.config.prefix}multibug 94712345678`,
 
-        const helpText = helpTexts[command] || `❌ No help available for command: ${command}`;
-        await reply(helpText);
+            bugstatus: `📖 *BUG STATUS*
+━━━━━━━━━━━━━━━━━
+💠 *Command:* ${this.config.prefix}bugstatus
+📝 *Usage:* ${this.config.prefix}bugstatus
+🎯 *Effect:* Show attack statistics
+⚡ *Duration:* Instant
+⚠️ *Risk:* None
+📌 *Info:* Shows total attacks, victims, etc.`
+        };
+        
+        const help = helpTexts[command] || `❌ No help available for: ${command}\n📝 Use ${this.config.prefix}bugmenu to see all commands`;
+        await reply(help);
+    }
+    
+    async bugInfo(sock, msg, args, from, isGroup, sender, pushname, reply) {
+        const plugins = this.manager.getPluginInfo();
+        const commandsByCategory = this.manager.getCommandsByCategory();
+        
+        let infoText = `
+╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃    📋 *PLUGIN INFORMATION* 📋
+┃    ═══════════════════════════════
+┃
+┃  🔌 *Loaded Plugins:* ${plugins.length}
+┃  ⚡ *Total Commands:* ${this.manager.commands.size}
+┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃
+┃  📦 *PLUGINS:*
+`;
+        
+        for (const plugin of plugins) {
+            infoText += `┃  • ${plugin.name} v${plugin.version}\n`;
+            infoText += `┃    └─ ${plugin.commands} commands | ${plugin.category}\n`;
+        }
+        
+        infoText += `
+┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃
+┃  🎯 *COMMANDS BY CATEGORY:*
+`;
+        
+        for (const [category, commands] of commandsByCategory) {
+            infoText += `┃  • ${category.toUpperCase()}: ${commands.length} commands\n`;
+        }
+        
+        infoText += `
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+💀 *CHALAH VOID SYSTEM v2.0*
+📱 Type ${this.config.prefix}bugmenu to see all commands
+        `;
+        
+        await reply(infoText);
+    }
+    
+    getActiveAttacks() {
+        // This would need access to bug plugin's active attacks
+        return global.activeAttacksCount || 0;
+    }
+    
+    getTotalAttacks() {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const statsPath = path.join(__dirname, '../bug_stats.json');
+            if (fs.existsSync(statsPath)) {
+                const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+                return stats.totalAttacks || 0;
+            }
+        } catch (error) {}
+        return 0;
+    }
+    
+    getVictimCount() {
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const statsPath = path.join(__dirname, '../bug_stats.json');
+            if (fs.existsSync(statsPath)) {
+                const stats = JSON.parse(fs.readFileSync(statsPath, 'utf8'));
+                return Object.keys(stats.victims || {}).length;
+            }
+        } catch (error) {}
+        return 0;
     }
 }
 
