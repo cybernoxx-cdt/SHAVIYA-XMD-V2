@@ -1,636 +1,383 @@
-// ============================================
-//   plugins/accesscontrol.js
-//   Complete Access Control & Premium System
-// ============================================
-
 const { cmd } = require('../command');
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
-// Data file paths
-const dataDir = path.join(__dirname, '../data');
-const settingsFile = path.join(dataDir, 'settings.json');
+// ═══════════════════════════════════════════════════
+//  Access Config — MongoDB Persist + File Fallback
+//  Restart වෙද්දිත් settings නැතිවෙන්නෙ නෑ ✅
+// ═══════════════════════════════════════════════════
 
-// Ensure data directory exists
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+const DATA_DIR = path.join(__dirname, '../data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+// ── MongoDB connection ──
+let _mongoCol = null;
+async function getCol() {
+  if (_mongoCol) return _mongoCol;
+  try {
+    const uri = process.env.MONGODB_URI;
+    if (!uri) return null;
+    const { MongoClient } = require('mongodb');
+    const client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+    await client.connect();
+    _mongoCol = client.db('hasiya_md').collection('access_config');
+    console.log('[ACCESS] MongoDB connected ✅');
+    return _mongoCol;
+  } catch (e) {
+    console.error('[ACCESS] MongoDB connect failed:', e.message);
+    return null;
+  }
 }
 
-// Default settings
-const defaultSettings = {
-    mode: 'public',
-    premiumUsers: {},
-    antiLink: false,
-    antiBadWords: false,
-    welcomeMessage: true,
-    autoRead: true,
-    autoBio: false,
-    autoReact: true,
-    autoStatusView: false,
-    commandCooldown: 3,
-    maxUsers: 1000,
-    bannedUsers: [],
-    allowedGroups: [],
-    pluginStatus: {},
-    lastUpdated: Date.now()
+// ── Number normalize ──
+function normalizeNumber(raw) {
+  if (!raw) return '';
+  return String(raw)
+    .replace(/@s\.whatsapp\.net/g, '')
+    .replace(/@lid/g, '')
+    .replace(/:\d+$/g, '')
+    .replace(/[^0-9]/g, '');
+}
+
+// ── Local file path per session ──
+function getLocalFile(sessionId) {
+  return path.join(DATA_DIR, `access_config_${sessionId}.json`);
+}
+
+// ── Load config: MongoDB first, fallback file ──
+async function getAccessConfig(sessionId) {
+  // Try MongoDB
+  try {
+    const col = await getCol();
+    if (col) {
+      const doc = await col.findOne({ _sessionId: sessionId });
+      if (doc) {
+        const { _id, _sessionId: _s, ...cfg } = doc;
+        // Sync to local file
+        fs.writeFileSync(getLocalFile(sessionId), JSON.stringify(cfg, null, 2));
+        return cfg;
+      }
+    }
+  } catch (e) {}
+
+  // Fallback: local file
+  try {
+    const file = getLocalFile(sessionId);
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {}
+
+  return { mode: 'public', premium: [], banned: [] };
+}
+
+// ── Save config: MongoDB + local file ──
+async function saveAccessConfig(sessionId, cfg) {
+  // Save to local file
+  try {
+    fs.writeFileSync(getLocalFile(sessionId), JSON.stringify(cfg, null, 2));
+  } catch (e) {}
+
+  // Save to MongoDB (async)
+  try {
+    const col = await getCol();
+    if (col) {
+      await col.updateOne(
+        { _sessionId: sessionId },
+        { $set: { ...cfg, _sessionId: sessionId } },
+        { upsert: true }
+      );
+    }
+  } catch (e) {
+    console.error('[ACCESS] MongoDB save failed:', e.message);
+  }
+}
+
+// ── In-memory cache for sync reads (index.js checkAccess) ──
+const _configCache = {};
+
+// Preload cache on startup
+async function preloadCache(sessionId) {
+  const cfg = await getAccessConfig(sessionId);
+  _configCache[sessionId] = cfg;
+  return cfg;
+}
+
+// Sync read from cache (used by global.checkAccess)
+function getAccessConfigSync(sessionId) {
+  return _configCache[sessionId] || { mode: 'public', premium: [], banned: [] };
+}
+
+// ═══════════════════════════════════════════════════
+//  Global Access Checker (index.js call කරනවා)
+// ═══════════════════════════════════════════════════
+global.checkAccess = function(sessionId, senderNumber, isOwner, isGroup) {
+  // Preload cache if not loaded yet (async, non-blocking)
+  if (!_configCache[sessionId]) {
+    preloadCache(sessionId);
+    return { allowed: true }; // Allow while loading
+  }
+
+  const cfg    = getAccessConfigSync(sessionId);
+  const mode   = cfg.mode || 'public';
+
+  if (isOwner) return { allowed: true, mode };
+
+  const normalSender = normalizeNumber(senderNumber);
+
+  // Banned check
+  const bannedList = (cfg.banned || []).map(normalizeNumber);
+  if (bannedList.includes(normalSender)) {
+    return { allowed: false, mode, reason: '🚫 You are banned from using this bot.' };
+  }
+
+  const premiumList = (cfg.premium || []).map(normalizeNumber);
+
+  switch (mode) {
+    case 'public':
+      return { allowed: true, mode };
+
+    case 'private':
+      return { allowed: false, mode, reason: '🔒 BOT PRIVATE MODE. Owner Only.' };
+
+    case 'inbox':
+      if (isGroup) return { allowed: false, mode, reason: '📩 BOT INBOX MODE. Inbox Only.' };
+      return { allowed: true, mode };
+
+    case 'group':
+      if (!isGroup) return { allowed: false, mode, reason: '👥 BOT GROUP MODE. Groups Only.' };
+      return { allowed: true, mode };
+
+    case 'premium':
+      if (!premiumList.includes(normalSender))
+        return { allowed: false, mode, reason: '💎 BOT PREMIUM MODE. Premium users Only.' };
+      return { allowed: true, mode };
+
+    case 'privatepremium':
+      if (!premiumList.includes(normalSender))
+        return { allowed: false, mode, reason: '💎 Private Premium Mode. Owner or Premium users Only.' };
+      return { allowed: true, mode };
+
+    default:
+      return { allowed: true, mode };
+  }
 };
 
-// Load settings from file
-function loadSettings() {
-    try {
-        if (fs.existsSync(settingsFile)) {
-            const data = fs.readFileSync(settingsFile, 'utf8');
-            const settings = JSON.parse(data);
-            return { ...defaultSettings, ...settings };
-        }
-    } catch (error) {
-        console.error('Error loading settings:', error);
-    }
-    return { ...defaultSettings };
-}
-
-// Save settings to file
-function saveSettings(settings) {
-    try {
-        settings.lastUpdated = Date.now();
-        fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
-        return true;
-    } catch (error) {
-        console.error('Error saving settings:', error);
-        return false;
-    }
-}
-
-// Get a specific setting
-function getSetting(key) {
-    const settings = loadSettings();
-    return settings[key];
-}
-
-// Set a specific setting
-function setSetting(key, value) {
-    const settings = loadSettings();
-    settings[key] = value;
-    return saveSettings(settings);
-}
-
-// Get all settings
-function getAllSettings() {
-    return loadSettings();
-}
-
-// Check if user is premium
-function isPremium(userJid) {
-    const settings = loadSettings();
-    const premiumUsers = settings.premiumUsers || {};
-    
-    // Handle old array format
-    if (Array.isArray(premiumUsers)) {
-        return premiumUsers.includes(userJid);
-    }
-    
-    const userData = premiumUsers[userJid];
-    if (!userData) return false;
-    
-    // Check expiry
-    return userData.expiresAt > Date.now();
-}
-
-// Check if user is owner
-function isOwner(userJid) {
-    const owners = ['94758127752@s.whatsapp.net', '94707085822@s.whatsapp.net'];
-    return owners.includes(userJid);
-}
-
-// Check command access based on mode
-function hasCommandAccess(userJid, isGroup) {
-    const mode = getSetting('mode');
-    const userIsPremium = isPremium(userJid);
-    const userIsOwner = isOwner(userJid);
-    
-    // Owner always has access
-    if (userIsOwner) return true;
-    
-    switch(mode) {
-        case 'private':
-            return false;
-        case 'inbox':
-            return !isGroup;
-        case 'group':
-            return isGroup;
-        case 'premium':
-            return userIsPremium;
-        case 'privatepremium':
-            return !isGroup && userIsPremium;
-        case 'public':
-        default:
-            return true;
-    }
-}
-
-// Get premium expiry date
-function getPremiumExpiry(userJid) {
-    const settings = loadSettings();
-    const premiumUsers = settings.premiumUsers || {};
-    
-    if (Array.isArray(premiumUsers)) return null;
-    
-    const userData = premiumUsers[userJid];
-    return userData ? userData.expiresAt : null;
-}
-
-// Check if user is banned
-function isBanned(userJid) {
-    const bannedUsers = getSetting('bannedUsers') || [];
-    return bannedUsers.some(user => user.jid === userJid);
-}
-
-// ── SET MODE ──────────────────────────────────
+// ═══════════════════════════════════════════════════
+//  1. SETMODE
+// ═══════════════════════════════════════════════════
 cmd({
-    pattern: 'setmode',
-    alias: ['mode'],
-    desc: 'Set bot mode (public/private/inbox/group/premium/privatepremium)',
-    category: 'settings',
-    react: '🔐',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, q, reply, from }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
+  pattern: 'setmode',
+  alias: ['mode'],
+  react: '🌏',
+  desc: 'Bot access mode set',
+  category: 'owner',
+  filename: __filename
+}, async (conn, mek, m, { q, reply, isOwner, sessionId }) => {
+  if (!isOwner) return reply('❌ Owner Only.');
 
-    const validModes = ['public', 'private', 'inbox', 'group', 'premium', 'privatepremium'];
-    
-    const modeDesc = {
-        'public': 'Everyone can use the bot',
-        'private': 'Only owner can use',
-        'inbox': 'Only works in private chats',
-        'group': 'Only works in groups',
-        'premium': 'Only premium users can use',
-        'privatepremium': 'Premium users + private chats only'
-    };
+  const modes = ['public', 'private', 'inbox', 'group', 'premium', 'privatepremium'];
+  const sub   = q?.trim().toLowerCase();
 
-    if (!q) {
-        const current = getSetting('mode');
-        return reply(`🔐 *Current Bot Mode:* *${current}*\n\n📋 *Available Modes:*\n${validModes.map(m => `├ *${m}* - ${modeDesc[m]}`).join('\n')}\n\n*Usage:* .setmode <mode>`);
-    }
+  const cfg = await getAccessConfig(sessionId);
 
-    const selectedMode = q.toLowerCase();
-    if (!validModes.includes(selectedMode)) {
-        return reply(`❌ *Invalid mode!*\n\n*Valid modes:*\n${validModes.map(m => `├ ${m}`).join('\n')}`);
-    }
+  if (!sub || !modes.includes(sub)) {
+    return reply(
+`⚙️ *Bot Access Modes*
 
-    setSetting('mode', selectedMode);
-    
-    const updateMsg = `✅ *Bot Mode Updated!*\n\n🔐 *New Mode:* *${selectedMode}*\n📝 *Description:* ${modeDesc[selectedMode]}\n\n⚡ Bot behavior has been updated!`;
-    
-    reply(updateMsg);
+Current: *${(cfg.mode || 'public').toUpperCase()}*
+
+Available Modes:
+• *public* — Anyone Can Use
+• *private* — Owner Only
+• *inbox* — Private Chat Only
+• *group* — Groups Only
+• *premium* — Premium users + Owner
+• *privatepremium* — Owner + Premium users (DM only)
+
+Example: *.setmode public*`
+    );
+  }
+
+  cfg.mode = sub;
+  await saveAccessConfig(sessionId, cfg);
+  _configCache[sessionId] = cfg;
+
+  const modeDesc = {
+    public:         '🌍 Anyone',
+    private:        '🔒 Owner Only',
+    inbox:          '📩 Inbox Only',
+    group:          '👥 Groups Only',
+    premium:        '💎 Premium users + Owner',
+    privatepremium: '🔐 Owner + Premium users'
+  };
+
+  reply(`✅ *Mode Updated:* ${sub.toUpperCase()}\n${modeDesc[sub]}\n\n_Saved to MongoDB — persists after restart ✅_`);
 });
 
-// ── ADD PREMIUM ───────────────────────────────
+// ═══════════════════════════════════════════════════
+//  2. ADDPREMIUM
+// ═══════════════════════════════════════════════════
 cmd({
-    pattern: 'addpremium',
-    alias: ['ap', 'addprem'],
-    desc: 'Add premium user with duration',
-    category: 'settings',
-    react: '💎',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, q, reply, quoted, from }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
+  pattern: 'addpremium',
+  alias: ['ap'],
+  react: '💎',
+  desc: 'Add premium user',
+  category: 'owner',
+  filename: __filename
+}, async (conn, mek, m, { q, reply, isOwner, sessionId }) => {
+  if (!isOwner) return reply('❌ Owner Only.');
 
-    let number = q ? q.split(' ')[0].replace(/[^0-9]/g, '') :
-                 quoted ? quoted.sender.split('@')[0] : null;
+  const number = normalizeNumber(q?.trim());
+  if (!number) return reply('📌 *Example:* `.addpremium 94xxxxxxxxx`');
 
-    if (!number) return reply('📝 *Usage:* .addpremium 94712345678 [days]\n\n*Example:* .addpremium 94712345678 30\n\nOr reply to a user message.');
+  const cfg = await getAccessConfig(sessionId);
+  if (!cfg.premium) cfg.premium = [];
 
-    let duration = 365;
-    const durationMatch = q ? q.match(/\d+/) : null;
-    if (durationMatch) {
-        duration = parseInt(durationMatch[0]);
-    }
+  if (cfg.premium.map(normalizeNumber).includes(number)) {
+    return reply(`⚠️ *${number}* is already in premium list.`);
+  }
 
-    const jid = number + '@s.whatsapp.net';
-    let premiumUsers = getSetting('premiumUsers') || {};
-    
-    if (Array.isArray(premiumUsers)) {
-        const newObj = {};
-        premiumUsers.forEach(user => {
-            newObj[user] = {
-                addedAt: Date.now(),
-                expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000),
-                addedBy: m.sender
-            };
-        });
-        premiumUsers = newObj;
-    }
-
-    if (premiumUsers[jid]) {
-        const expiryDate = new Date(premiumUsers[jid].expiresAt);
-        return reply(`⚠️ *@${number} is already premium!*\n\n📅 *Expires:* ${expiryDate.toLocaleDateString()}\n\nUse *.extendpremium* to extend duration.`);
-    }
-
-    const expiresAt = Date.now() + (duration * 24 * 60 * 60 * 1000);
-    premiumUsers[jid] = {
-        addedAt: Date.now(),
-        expiresAt: expiresAt,
-        addedBy: m.sender,
-        duration: duration
-    };
-    
-    setSetting('premiumUsers', premiumUsers);
-    
-    const expiryDate = new Date(expiresAt);
-    reply(`✅ *@${number} added as Premium user!* 💎\n\n📅 *Duration:* ${duration} days\n📆 *Expires:* ${expiryDate.toLocaleDateString()}\n\n*Premium features unlocked!*`);
-    
-    try {
-        await conn.sendMessage(jid, {
-            text: `🎉 *Congratulations!*\n\nYou have been granted *PREMIUM ACCESS* to SHAVIYA-XMD V2 Bot! 💎\n\n📅 *Valid until:* ${expiryDate.toLocaleDateString()}\n\n✨ *Premium Features:*\n├ Unlimited usage\n├ Priority support\n├ Exclusive commands\n├ No restrictions\n└ 24/7 access\n\nEnjoy the premium experience! 🚀`
-        });
-    } catch(e) {
-        console.log('Could not notify premium user:', e);
-    }
+  cfg.premium.push(number);
+  await saveAccessConfig(sessionId, cfg);
+  _configCache[sessionId] = cfg;
+  reply(`✅ *${number}* added to premium! 💎\nTotal: ${cfg.premium.length}`);
 });
 
-// ── EXTEND PREMIUM ────────────────────────────
+// ═══════════════════════════════════════════════════
+//  3. REMOVEPREMIUM
+// ═══════════════════════════════════════════════════
 cmd({
-    pattern: 'extendpremium',
-    alias: ['ep', 'extend'],
-    desc: 'Extend premium user duration',
-    category: 'settings',
-    react: '⏰',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, q, reply, quoted }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
+  pattern: 'removepremium',
+  alias: ['rp', 'delpremium'],
+  react: '🗑️',
+  desc: 'Remove premium user',
+  category: 'owner',
+  filename: __filename
+}, async (conn, mek, m, { q, reply, isOwner, sessionId }) => {
+  if (!isOwner) return reply('❌ Owner Only.');
 
-    let number = q ? q.split(' ')[0].replace(/[^0-9]/g, '') :
-                 quoted ? quoted.sender.split('@')[0] : null;
-    
-    let days = q ? parseInt(q.split(' ')[1]) : 30;
-    
-    if (!number) return reply('📝 *Usage:* .extendpremium 94712345678 30\n\nOr reply to a user message.');
+  const number = normalizeNumber(q?.trim());
+  if (!number) return reply('📌 *Example:* `.removepremium 94xxxxxxxxx`');
 
-    const jid = number + '@s.whatsapp.net';
-    let premiumUsers = getSetting('premiumUsers') || {};
-    
-    if (!premiumUsers[jid]) {
-        return reply(`⚠️ *@${number} is not a premium user!\n\nUse .addpremium to add them first.*`);
-    }
+  const cfg = await getAccessConfig(sessionId);
+  if (!cfg.premium) cfg.premium = [];
 
-    const currentExpiry = premiumUsers[jid].expiresAt;
-    const newExpiry = currentExpiry + (days * 24 * 60 * 60 * 1000);
-    
-    premiumUsers[jid].expiresAt = newExpiry;
-    premiumUsers[jid].extendedBy = m.sender;
-    premiumUsers[jid].lastExtended = Date.now();
-    
-    setSetting('premiumUsers', premiumUsers);
-    
-    const newExpiryDate = new Date(newExpiry);
-    reply(`✅ *Premium extended for @${number}!* ⏰\n\n📅 *New expiry:* ${newExpiryDate.toLocaleDateString()}\n➕ *Added:* ${days} days`);
+  const idx = cfg.premium.map(normalizeNumber).indexOf(number);
+  if (idx === -1) return reply(`❌ *${number}* not in premium list.`);
+
+  cfg.premium.splice(idx, 1);
+  await saveAccessConfig(sessionId, cfg);
+  _configCache[sessionId] = cfg;
+  reply(`✅ *${number}* removed from premium!\nTotal: ${cfg.premium.length}`);
 });
 
-// ── REMOVE PREMIUM ────────────────────────────
+// ═══════════════════════════════════════════════════
+//  4. PREMIUMLIST
+// ═══════════════════════════════════════════════════
 cmd({
-    pattern: 'removepremium',
-    alias: ['rp', 'delpremium', 'rmprem'],
-    desc: 'Remove premium user',
-    category: 'settings',
-    react: '🗑️',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, q, reply, quoted }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
+  pattern: 'premiumlist',
+  alias: ['plist'],
+  react: '💎',
+  desc: 'List premium users',
+  category: 'owner',
+  filename: __filename
+}, async (conn, mek, m, { reply, isOwner, sessionId }) => {
+  if (!isOwner) return reply('❌ Owner Only.');
 
-    let number = q ? q.replace(/[^0-9]/g, '') :
-                 quoted ? quoted.sender.split('@')[0] : null;
+  const cfg  = await getAccessConfig(sessionId);
+  const list = cfg.premium || [];
 
-    if (!number) return reply('📝 *Usage:* .removepremium 94712345678\n\nOr reply to a user message.');
+  if (!list.length) return reply('💎 *Premium List*\n\nNo premium users.');
 
-    const jid = number + '@s.whatsapp.net';
-    let premiumUsers = getSetting('premiumUsers') || {};
-
-    if (!premiumUsers[jid]) return reply(`⚠️ *@${number} is not a premium user!*`);
-
-    delete premiumUsers[jid];
-    setSetting('premiumUsers', premiumUsers);
-    
-    reply(`✅ *@${number} removed from Premium!*`);
-    
-    try {
-        await conn.sendMessage(jid, {
-            text: `⚠️ *Premium Access Revoked*\n\nYour premium access to SHAVIYA-XMD V2 Bot has been removed.\n\nContact owner for more information.`
-        });
-    } catch(e) {}
+  let text = `💎 *Premium Users*\nTotal: ${list.length}\n\n`;
+  list.forEach((n, i) => { text += `*${i + 1}.* +${n}\n`; });
+  reply(text);
 });
 
-// ── PREMIUM LIST ──────────────────────────────
+// ═══════════════════════════════════════════════════
+//  5. BAN / UNBAN
+// ═══════════════════════════════════════════════════
 cmd({
-    pattern: 'premiumlist',
-    alias: ['plist', 'premlist', 'premiums'],
-    desc: 'List all premium users with details',
-    category: 'settings',
-    react: '📋',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, reply, from }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
+  pattern: 'ban',
+  react: '🚫',
+  desc: 'Ban a user',
+  category: 'owner',
+  filename: __filename
+}, async (conn, mek, m, { q, reply, isOwner, sessionId }) => {
+  if (!isOwner) return reply('❌ Owner Only.');
 
-    let premiumUsers = getSetting('premiumUsers') || {};
-    
-    if (Array.isArray(premiumUsers)) {
-        const newObj = {};
-        premiumUsers.forEach(user => {
-            newObj[user] = {
-                addedAt: Date.now(),
-                expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000)
-            };
-        });
-        premiumUsers = newObj;
-    }
+  const number = normalizeNumber(q?.trim());
+  if (!number) return reply('📌 *Example:* `.ban 94xxxxxxxxx`');
 
-    const premiumArray = Object.entries(premiumUsers);
-    
-    if (premiumArray.length === 0) return reply('💎 *No premium users found.*\n\nUse .addpremium to add users.');
+  const cfg = await getAccessConfig(sessionId);
+  if (!cfg.banned) cfg.banned = [];
 
-    let active = 0;
-    let expired = 0;
-    const now = Date.now();
-    
-    let list = `💎 *PREMIUM USERS LIST* 💎\n━━━━━━━━━━━━━━━━━━━━\n\n`;
-    
-    premiumArray.forEach(([jid, data], i) => {
-        const expiresAt = data.expiresAt;
-        const isValid = expiresAt > now;
-        
-        if (isValid) active++;
-        else expired++;
-        
-        const expiryDate = new Date(expiresAt);
-        const daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
-        
-        list += `${i + 1}. @${jid.split('@')[0]}\n`;
-        list += `   ├ 📅 Added: ${new Date(data.addedAt).toLocaleDateString()}\n`;
-        list += `   ├ ⏰ Expires: ${expiryDate.toLocaleDateString()}\n`;
-        list += `   └ 💫 Status: ${isValid ? `✅ Active (${daysLeft} days left)` : '❌ Expired'}\n\n`;
-    });
-    
-    list += `━━━━━━━━━━━━━━━━━━━━\n`;
-    list += `📊 *Statistics:*\n`;
-    list += `├ 🟢 Active: ${active}\n`;
-    list += `└ 🔴 Expired: ${expired}\n`;
-    list += `━━━━━━━━━━━━━━━━━━━━\n`;
-    list += `Total Premium Users: ${premiumArray.length}`;
+  if (cfg.banned.map(normalizeNumber).includes(number)) {
+    return reply(`⚠️ *${number}* already banned.`);
+  }
 
-    const mentions = premiumArray.map(([jid]) => jid);
-    
-    await conn.sendMessage(from, {
-        text: list,
-        mentions: mentions
-    }, { quoted: mek });
+  cfg.banned.push(number);
+  await saveAccessConfig(sessionId, cfg);
+  _configCache[sessionId] = cfg;
+  reply(`🚫 *${number}* banned!`);
 });
 
-// ── CHECK PREMIUM STATUS ──────────────────────────────
 cmd({
-    pattern: 'checkpremium',
-    alias: ['mypremium', 'premstatus'],
-    desc: 'Check your premium status',
-    category: 'settings',
-    react: '🔍',
-    filename: __filename
-},
-async (conn, mek, m, { sender, reply, from }) => {
-    let premiumUsers = getSetting('premiumUsers') || {};
-    
-    if (Array.isArray(premiumUsers)) {
-        const newObj = {};
-        premiumUsers.forEach(user => {
-            newObj[user] = {
-                addedAt: Date.now(),
-                expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000)
-            };
-        });
-        premiumUsers = newObj;
-    }
-    
-    const userData = premiumUsers[sender];
-    
-    if (!userData) {
-        return reply(`🔍 *Premium Status*\n\n💎 *Status:* Free User\n\n✨ *Upgrade to Premium:*\nContact owner to get premium access!\n\n📞 Owner: +94758127752`);
-    }
-    
-    const now = Date.now();
-    const isValid = userData.expiresAt > now;
-    const daysLeft = Math.ceil((userData.expiresAt - now) / (1000 * 60 * 60 * 24));
-    const expiryDate = new Date(userData.expiresAt);
-    
-    let statusMsg = `💎 *PREMIUM STATUS* 💎\n━━━━━━━━━━━━━━━━━━━━\n\n`;
-    statusMsg += `👤 *User:* @${sender.split('@')[0]}\n`;
-    statusMsg += `🎫 *Status:* ${isValid ? '✅ Active Premium' : '❌ Expired'}\n`;
-    
-    if (isValid) {
-        statusMsg += `⏰ *Days Left:* ${daysLeft} days\n`;
-        statusMsg += `📅 *Expires:* ${expiryDate.toLocaleDateString()}\n`;
-        statusMsg += `📆 *Added:* ${new Date(userData.addedAt).toLocaleDateString()}\n\n`;
-        statusMsg += `✨ *Premium Features:*\n`;
-        statusMsg += `├ Unlimited commands\n`;
-        statusMsg += `├ Priority support\n`;
-        statusMsg += `├ Exclusive features\n`;
-        statusMsg += `└ No restrictions\n`;
-    } else {
-        statusMsg += `\n⚠️ *Premium has expired!*\nRenew to continue enjoying premium features.\n`;
-    }
-    
-    await conn.sendMessage(from, {
-        text: statusMsg,
-        mentions: [sender]
-    }, { quoted: mek });
+  pattern: 'unban',
+  react: '✅',
+  desc: 'Unban a user',
+  category: 'owner',
+  filename: __filename
+}, async (conn, mek, m, { q, reply, isOwner, sessionId }) => {
+  if (!isOwner) return reply('❌ Owner Only.');
+
+  const number = normalizeNumber(q?.trim());
+  if (!number) return reply('📌 *Example:* `.unban 94xxxxxxxxx`');
+
+  const cfg = await getAccessConfig(sessionId);
+  if (!cfg.banned) cfg.banned = [];
+
+  const idx = cfg.banned.map(normalizeNumber).indexOf(number);
+  if (idx === -1) return reply(`❌ *${number}* not in ban list.`);
+
+  cfg.banned.splice(idx, 1);
+  await saveAccessConfig(sessionId, cfg);
+  _configCache[sessionId] = cfg;
+  reply(`✅ *${number}* unbanned!`);
 });
 
-// ── MY MODE ───────────────────────────────────
+// ═══════════════════════════════════════════════════
+//  6. MYMODE
+// ═══════════════════════════════════════════════════
 cmd({
-    pattern: 'mymode',
-    alias: ['botmode', 'status'],
-    desc: 'Check current bot mode and your status',
-    category: 'settings',
-    react: '🔍',
-    filename: __filename
-},
-async (conn, mek, m, { sender, reply, from }) => {
-    const mode = getSetting('mode');
-    let premiumUsers = getSetting('premiumUsers') || {};
-    
-    if (Array.isArray(premiumUsers)) {
-        const newObj = {};
-        premiumUsers.forEach(user => {
-            newObj[user] = {
-                addedAt: Date.now(),
-                expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000)
-            };
-        });
-        premiumUsers = newObj;
-    }
-    
-    const isPrem = premiumUsers[sender] && premiumUsers[sender].expiresAt > Date.now();
-    
-    const modeInfo = {
-        'public': '🟢 *Public Mode* - Everyone can use the bot',
-        'private': '🔴 *Private Mode* - Only owner can use',
-        'inbox': '📩 *Inbox Mode* - Only works in private chats',
-        'group': '👥 *Group Mode* - Only works in groups',
-        'premium': '💎 *Premium Mode* - Only premium users can use',
-        'privatepremium': '💎📩 *Private Premium Mode* - Premium users + private chats only'
-    };
-    
-    let statusMsg = `🔍 *BOT STATUS* 🔍\n━━━━━━━━━━━━━━━━━━━━\n\n`;
-    statusMsg += `${modeInfo[mode] || `🔐 *Mode:* ${mode}`}\n\n`;
-    statusMsg += `👤 *Your Status:*\n`;
-    statusMsg += `${isPrem ? '💎 *Premium User* ✅\n├ Unlimited access\n└ Priority support' : '🆓 *Free User*\n├ Limited access\n└ Upgrade to premium for more'}\n\n`;
-    statusMsg += `📊 *Bot Info:*\n`;
-    statusMsg += `├ *Version:* 2.0.0\n`;
-    statusMsg += `├ *Type:* Premium Edition\n`;
-    statusMsg += `└ *Support:* 24/7\n`;
-    
-    reply(statusMsg);
+  pattern: 'mymode',
+  alias: ['botmode'],
+  react: '🔍',
+  desc: 'Check current bot mode',
+  category: 'owner',
+  filename: __filename
+}, async (conn, mek, m, { reply, sessionId, senderNumber, isOwner }) => {
+  const cfg      = await getAccessConfig(sessionId);
+  const mode     = cfg.mode || 'public';
+  const normalMe = normalizeNumber(senderNumber);
+  const isPrem   = (cfg.premium || []).map(normalizeNumber).includes(normalMe);
+
+  const modeDesc = {
+    public:         '🌍 Public — Anyone',
+    private:        '🔒 Private — Owner Only',
+    inbox:          '📩 Inbox — DM Only',
+    group:          '👥 Group — Groups Only',
+    premium:        '💎 Premium — Premium + Owner',
+    privatepremium: '🔐 Private Premium — Owner + Premium'
+  };
+
+  const status = isOwner ? '👑 Owner' : isPrem ? '💎 Premium' : '👤 User';
+
+  reply(
+`🔍 *Bot Mode Info*
+
+⚙️ *Mode:* ${modeDesc[mode] || mode}
+👤 *Your Status:* ${status}
+💾 *Storage:* MongoDB (persists after restart ✅)
+${isPrem || isOwner ? '✅ You can use the bot' : '❌ Access restricted by mode'}`
+  );
 });
-
-// ── GET SETTINGS ──────────────────────────────
-cmd({
-    pattern: 'getsettings',
-    alias: ['settings', 'config'],
-    desc: 'View all bot settings',
-    category: 'settings',
-    react: '⚙️',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, reply }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
-    
-    const allSettings = getAllSettings();
-    const premiumCount = Object.keys(allSettings.premiumUsers || {}).length;
-    
-    let settingsMsg = `⚙️ *BOT SETTINGS* ⚙️\n━━━━━━━━━━━━━━━━━━━━\n\n`;
-    settingsMsg += `🔐 *Mode:* ${allSettings.mode || 'public'}\n`;
-    settingsMsg += `💎 *Premium Users:* ${premiumCount}\n`;
-    settingsMsg += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-    settingsMsg += `*Other Settings:*\n`;
-    
-    Object.entries(allSettings).forEach(([key, value]) => {
-        if (key !== 'premiumUsers' && key !== 'mode') {
-            const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
-            settingsMsg += `├ ${key}: ${displayValue}\n`;
-        }
-    });
-    
-    reply(settingsMsg);
-});
-
-// ── BAN USER ──────────────────────────────────
-cmd({
-    pattern: 'ban',
-    alias: ['block'],
-    desc: 'Ban a user from using the bot',
-    category: 'settings',
-    react: '🔨',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, q, reply, quoted }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
-
-    let number = q ? q.replace(/[^0-9]/g, '') :
-                 quoted ? quoted.sender.split('@')[0] : null;
-
-    if (!number) return reply('📝 *Usage:* .ban 94712345678\n\nOr reply to a user message.');
-
-    const jid = number + '@s.whatsapp.net';
-    let bannedUsers = getSetting('bannedUsers') || [];
-    
-    if (bannedUsers.includes(jid)) {
-        return reply(`⚠️ *@${number} is already banned!*`);
-    }
-    
-    bannedUsers.push(jid);
-    setSetting('bannedUsers', bannedUsers);
-    
-    reply(`✅ *@${number} has been banned from using the bot!* 🔨`);
-    
-    try {
-        await conn.sendMessage(jid, {
-            text: `⚠️ *You have been BANNED* ⚠️\n\nYou are no longer allowed to use SHAVIYA-XMD V2 Bot.\n\nReason: Violation of bot rules.\n\nContact owner for appeal.`
-        });
-    } catch(e) {}
-});
-
-// ── UNBAN USER ────────────────────────────────
-cmd({
-    pattern: 'unban',
-    alias: ['unblock'],
-    desc: 'Unban a user',
-    category: 'settings',
-    react: '🔓',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, q, reply, quoted }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
-
-    let number = q ? q.replace(/[^0-9]/g, '') :
-                 quoted ? quoted.sender.split('@')[0] : null;
-
-    if (!number) return reply('📝 *Usage:* .unban 94712345678\n\nOr reply to a user message.');
-
-    const jid = number + '@s.whatsapp.net';
-    let bannedUsers = getSetting('bannedUsers') || [];
-    
-    if (!bannedUsers.includes(jid)) {
-        return reply(`⚠️ *@${number} is not banned!*`);
-    }
-    
-    bannedUsers = bannedUsers.filter(user => user !== jid);
-    setSetting('bannedUsers', bannedUsers);
-    
-    reply(`✅ *@${number} has been unbanned!* 🔓`);
-    
-    try {
-        await conn.sendMessage(jid, {
-            text: `✅ *You have been UNBANNED* ✅\n\nYou can now use SHAVIYA-XMD V2 Bot again.\n\nPlease follow the rules.`
-        });
-    } catch(e) {}
-});
-
-// ── BANNED LIST ───────────────────────────────
-cmd({
-    pattern: 'bannedlist',
-    alias: ['banlist', 'bans'],
-    desc: 'List all banned users',
-    category: 'settings',
-    react: '📋',
-    filename: __filename
-},
-async (conn, mek, m, { isOwner, reply, from }) => {
-    if (!isOwner) return reply('❌ *Owner only command!*');
-    
-    const bannedUsers = getSetting('bannedUsers') || [];
-    
-    if (bannedUsers.length === 0) {
-        return reply('🔓 *No banned users found.*');
-    }
-    
-    let list = `🔨 *BANNED USERS* 🔨\n━━━━━━━━━━━━━━━━━━━━\n\n`;
-    bannedUsers.forEach((jid, i) => {
-        list += `${i + 1}. @${jid.split('@')[0]}\n`;
-    });
-    
-    await conn.sendMessage(from, {
-        text: list,
-        mentions: bannedUsers
-    }, { quoted: mek });
-});
-
-// Export functions for use in other plugins
-module.exports = {
-    getSetting,
-    setSetting,
-    isPremium,
-    isOwner,
-    hasCommandAccess,
-    isBanned
-};
