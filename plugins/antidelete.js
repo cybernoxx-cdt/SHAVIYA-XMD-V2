@@ -1,165 +1,217 @@
 // ============================================
-//   plugins/antidelete.js - FIXED VERSION
-//   Fixes:
-//   1. Sender number/name correctly shown
-//   2. Images/Videos actually forwarded
-//   3. Works with index.js onMessage/onDelete
-//   4. Proper media download buffer
+//   plugins/antidelete.js — SHAVIYA-XMD V2
+//   FULLY FIXED:
+//   ✅ BUG 1: Media (image/video/audio) now downloads correctly
+//   ✅ BUG 2: Sender number shown correctly (groups + DMs)
+//   ✅ BUG 3: Clean, readable message format
 // ============================================
 
+'use strict';
+
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const { getSetting } = require('../lib/settings');
 
-// ── Message Cache ──
+// ── Message cache ─────────────────────────────────────────
 const msgCache = new Map();
-const MAX_CACHE = 1000;
+const MAX_CACHE = 1500;
 
-// ── Auto clean every 30 min ──
+// Clean cache every 30 min — remove msgs older than 1 hour
 setInterval(() => {
-    const now = Date.now();
-    for (const [key, val] of msgCache.entries()) {
-        if (now - val.timestamp > 3600000) msgCache.delete(key);
+    const cutoff = Date.now() - 3_600_000;
+    for (const [k, v] of msgCache.entries()) {
+        if (v.timestamp < cutoff) msgCache.delete(k);
     }
-}, 1800000);
+}, 1_800_000);
 
-// ══════════════════════════════════════════
-//   onMessage — cache every incoming msg
-//   Called from index.js messages.upsert
-// ══════════════════════════════════════════
+// ── Download helper using Baileys directly ────────────────
+// BUG 1 FIX: conn.downloadMediaMessage() doesn't exist in V2.
+// Must use downloadContentFromMessage() from @whiskeysockets/baileys.
+async function downloadMedia(msgContent) {
+    // Determine media type and the correct message object
+    let mediaType, mediaMsg;
+
+    if (msgContent.imageMessage) {
+        mediaType = 'image';
+        mediaMsg  = msgContent.imageMessage;
+    } else if (msgContent.videoMessage) {
+        mediaType = 'video';
+        mediaMsg  = msgContent.videoMessage;
+    } else if (msgContent.audioMessage) {
+        mediaType = 'audio';
+        mediaMsg  = msgContent.audioMessage;
+    } else if (msgContent.stickerMessage) {
+        mediaType = 'sticker';
+        mediaMsg  = msgContent.stickerMessage;
+    } else if (msgContent.documentMessage) {
+        mediaType = 'document';
+        mediaMsg  = msgContent.documentMessage;
+    } else {
+        return null;
+    }
+
+    try {
+        const stream = await downloadContentFromMessage(mediaMsg, mediaType);
+        let buffer = Buffer.alloc(0);
+        for await (const chunk of stream) {
+            buffer = Buffer.concat([buffer, chunk]);
+        }
+        return buffer;
+    } catch (e) {
+        console.log(`[ANTIDELETE] Media download failed (${mediaType}):`, e.message);
+        return null;
+    }
+}
+
+// ══════════════════════════════════════════════════════════
+//   onMessage — cache every incoming message
+//   Called from index.js  →  messages.upsert
+// ══════════════════════════════════════════════════════════
 async function onMessage(conn, mek, sessionId) {
     try {
         if (!mek?.message) return;
         if (mek.key.fromMe) return;
 
-        // ── Unwrap ephemeral messages ──
-        const msgContent = mek.message?.ephemeralMessage?.message || mek.message;
+        // Unwrap ephemeral/viewOnce wrapper
+        const msgContent =
+            mek.message?.ephemeralMessage?.message ||
+            mek.message?.viewOnceMessage?.message ||
+            mek.message;
+
         if (!msgContent) return;
 
-        const key       = mek.key.id;
-        const chat      = mek.key.remoteJid;
-        const isGroup   = chat?.endsWith('@g.us');
-        const sender    = isGroup
-            ? (mek.key.participant || mek.participant || chat)
+        const id      = mek.key.id;
+        const chat    = mek.key.remoteJid;
+        const isGroup = chat?.endsWith('@g.us');
+
+        // BUG 2 FIX: correct sender extraction
+        // Group  → participant field holds the actual sender JID
+        // DM     → remoteJid IS the sender
+        const sender = isGroup
+            ? (mek.key.participant || mek.participant || '')
             : chat;
 
-        msgCache.set(key, {
+        // Clean number: strip @s.whatsapp.net and device suffix (e.g. 94711:5)
+        const senderNumber = sender.split('@')[0].split(':')[0];
+        const pushName     = mek.pushName || senderNumber;
+
+        msgCache.set(id, {
             mek,
             msgContent,
-            timestamp:  Date.now(),
             chat,
             sender,
+            senderNumber,
+            pushName,
             isGroup,
-            pushName:   mek.pushName || '',
-            sessionId
+            timestamp: Date.now(),
+            sessionId,
         });
 
-        // Keep under limit
+        // Enforce cache limit
         if (msgCache.size > MAX_CACHE) {
-            const firstKey = msgCache.keys().next().value;
-            msgCache.delete(firstKey);
+            msgCache.delete(msgCache.keys().next().value);
         }
     } catch (e) {
-        console.log('[ANTIDELETE onMessage ERROR]:', e.message);
+        console.log('[ANTIDELETE onMessage]:', e.message);
     }
 }
 
-// ══════════════════════════════════════════
-//   onDelete — detect & forward deleted msg
-//   Called from index.js messages.update
-// ══════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+//   onDelete — detect revoke & forward to owner DM
+//   Called from index.js  →  messages.update
+// ══════════════════════════════════════════════════════════
 async function onDelete(conn, updates, sessionId) {
     try {
-        const isEnabled = getSetting('antidelete');
-        if (!isEnabled) return;
+        if (!getSetting('antidelete')) return;
 
-        // ── Owner JID ──
-        const ownerNumber = conn.user?.id?.split(':')[0];
-        if (!ownerNumber) return;
-        const ownerJid = ownerNumber + '@s.whatsapp.net';
+        // Owner JID — send all deleted msgs here
+        const rawOwner = conn.user?.id?.split(':')[0]?.split('@')[0];
+        if (!rawOwner) return;
+        const ownerJid = rawOwner + '@s.whatsapp.net';
 
         for (const update of updates) {
             try {
-                const msg = update.update?.message;
+                const updateMsg = update.update?.message;
 
-                // ── Detect delete (protocol message revoke) ──
+                // Detect message revoke
                 const isRevoke =
-                    msg?.protocolMessage?.type === 0 ||
-                    msg?.protocolMessage?.type === 'REVOKE' ||
+                    updateMsg?.protocolMessage?.type === 0 ||
+                    updateMsg?.protocolMessage?.type === 'REVOKE' ||
                     update.update?.messageStubType === 1;
 
                 if (!isRevoke) continue;
 
-                // ── Get deleted message key ──
-                const deletedKey =
-                    msg?.protocolMessage?.key?.id ||
+                // ID of the deleted message
+                const deletedId =
+                    updateMsg?.protocolMessage?.key?.id ||
                     update.key?.id;
 
-                if (!deletedKey) continue;
+                if (!deletedId) continue;
 
-                const cached = msgCache.get(deletedKey);
-                if (!cached) continue;
+                const cached = msgCache.get(deletedId);
+                if (!cached) {
+                    // Message wasn't cached (bot missed it or too old)
+                    continue;
+                }
 
-                const { mek, msgContent, chat, sender, isGroup, pushName } = cached;
+                const { mek, msgContent, chat, senderNumber, pushName, isGroup } = cached;
 
-                // ── Sender info ──
-                const senderNumber = sender?.split('@')[0]?.split(':')[0] || 'Unknown';
-                const senderName   = pushName || senderNumber;
-
-                // ── Group name ──
-                let chatName = isGroup ? chat?.split('@')[0] : 'Private Chat';
+                // Group name
+                let groupName = '';
                 if (isGroup) {
                     try {
                         const meta = await conn.groupMetadata(chat);
-                        chatName = meta.subject;
-                    } catch {}
+                        groupName = meta.subject;
+                    } catch {
+                        groupName = chat.split('@')[0];
+                    }
                 }
 
-                // ── Sri Lanka time ──
-                const time = new Date().toLocaleString('en-US', {
-                    timeZone: 'Asia/Colombo',
-                    hour:     '2-digit',
-                    minute:   '2-digit',
-                    day:      '2-digit',
-                    month:    'short',
-                    year:     'numeric'
+                // BUG 3 FIX: Clean readable format, no broken box characters
+                // Sri Lanka time
+                const time = new Date().toLocaleString('en-GB', {
+                    timeZone:  'Asia/Colombo',
+                    day:       '2-digit',
+                    month:     'short',
+                    year:      'numeric',
+                    hour:      '2-digit',
+                    minute:    '2-digit',
+                    second:    '2-digit',
+                    hour12:    true,
                 });
 
-                const header =
-`╔▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄╗
-▌  🗑️ *DELETED MESSAGE* 🗑️  ▐
-╚▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀╝
+                const info =
+`🗑️ *DELETED MESSAGE DETECTED*
+━━━━━━━━━━━━━━━━━━━━━
+👤 *Name:*    ${pushName}
+📱 *Number:*  +${senderNumber}
+${isGroup
+    ? `👥 *Group:*   ${groupName}`
+    : `💬 *Chat:*    Private DM`}
+🕐 *Time:*    ${time}
+━━━━━━━━━━━━━━━━━━━━━`;
 
-👤 *From:*  ${senderName}
-📱 *Number:* +${senderNumber}
-${isGroup ? `👥 *Group:*  ${chatName}` : `💬 *Chat:*   Private`}
-🕐 *Time:*  ${time}
-━━━━━━━━━━━━━━━━━━━━━━━━
-🗑️ *Deleted Content:*`;
-
-                // ══════════════════════════════════════
-                //   Handle message types
-                // ══════════════════════════════════════
-
-                // ── Text ──
+                // ── Text message ──
                 if (msgContent.conversation || msgContent.extendedTextMessage) {
-                    const text = msgContent.conversation ||
-                                 msgContent.extendedTextMessage?.text || '';
+                    const text =
+                        msgContent.conversation ||
+                        msgContent.extendedTextMessage?.text || '';
                     await conn.sendMessage(ownerJid, {
-                        text: `${header}\n\n${text}`
+                        text: `${info}\n\n💬 *Content:*\n${text}`,
                     });
                 }
 
                 // ── Image ──
                 else if (msgContent.imageMessage) {
                     const caption = msgContent.imageMessage.caption || '';
-                    try {
-                        const buffer = await conn.downloadMediaMessage(mek);
+                    const buffer  = await downloadMedia(msgContent);
+                    if (buffer) {
                         await conn.sendMessage(ownerJid, {
                             image:   buffer,
-                            caption: `${header}\n\n📷 *Image*${caption ? `\n_Caption:_ ${caption}` : ''}`
+                            caption: `${info}\n\n📷 *Image deleted*${caption ? `\n💬 *Caption:* ${caption}` : ''}`,
                         });
-                    } catch {
+                    } else {
                         await conn.sendMessage(ownerJid, {
-                            text: `${header}\n\n📷 *Image deleted*${caption ? `\n_Caption:_ ${caption}` : ''}`
+                            text: `${info}\n\n📷 *Image deleted*${caption ? `\n💬 *Caption:* ${caption}` : ''}\n\n⚠️ _Media expired — could not download_`,
                         });
                     }
                 }
@@ -167,53 +219,48 @@ ${isGroup ? `👥 *Group:*  ${chatName}` : `💬 *Chat:*   Private`}
                 // ── Video ──
                 else if (msgContent.videoMessage) {
                     const caption = msgContent.videoMessage.caption || '';
-                    try {
-                        const buffer = await conn.downloadMediaMessage(mek);
+                    const buffer  = await downloadMedia(msgContent);
+                    if (buffer) {
                         await conn.sendMessage(ownerJid, {
                             video:   buffer,
-                            caption: `${header}\n\n🎥 *Video*${caption ? `\n_Caption:_ ${caption}` : ''}`
+                            caption: `${info}\n\n🎥 *Video deleted*${caption ? `\n💬 *Caption:* ${caption}` : ''}`,
                         });
-                    } catch {
+                    } else {
                         await conn.sendMessage(ownerJid, {
-                            text: `${header}\n\n🎥 *Video deleted*${caption ? `\n_Caption:_ ${caption}` : ''}`
+                            text: `${info}\n\n🎥 *Video deleted*${caption ? `\n💬 *Caption:* ${caption}` : ''}\n\n⚠️ _Media expired — could not download_`,
                         });
                     }
                 }
 
-                // ── Audio / PTT ──
+                // ── Audio / Voice note ──
                 else if (msgContent.audioMessage) {
-                    const isPtt = msgContent.audioMessage.ptt;
-                    try {
-                        const buffer = await conn.downloadMediaMessage(mek);
+                    const isPtt  = msgContent.audioMessage.ptt;
+                    const buffer = await downloadMedia(msgContent);
+                    // Send info header first
+                    await conn.sendMessage(ownerJid, {
+                        text: `${info}\n\n${isPtt ? '🎤 *Voice note deleted*' : '🎵 *Audio deleted*'}`,
+                    });
+                    if (buffer) {
                         await conn.sendMessage(ownerJid, {
                             audio:    buffer,
                             mimetype: 'audio/ogg; codecs=opus',
-                            ptt:      isPtt
+                            ptt:      isPtt,
                         });
+                    } else {
                         await conn.sendMessage(ownerJid, {
-                            text: `${header}\n\n${isPtt ? '🎤 *Voice note deleted*' : '🎵 *Audio deleted*'}`
-                        });
-                    } catch {
-                        await conn.sendMessage(ownerJid, {
-                            text: `${header}\n\n${isPtt ? '🎤 *Voice note deleted*' : '🎵 *Audio deleted*'}`
+                            text: '⚠️ _Media expired — could not download audio_',
                         });
                     }
                 }
 
                 // ── Sticker ──
                 else if (msgContent.stickerMessage) {
-                    try {
-                        const buffer = await conn.downloadMediaMessage(mek);
-                        await conn.sendMessage(ownerJid, {
-                            sticker: buffer
-                        });
-                        await conn.sendMessage(ownerJid, {
-                            text: `${header}\n\n🎭 *Sticker deleted*`
-                        });
-                    } catch {
-                        await conn.sendMessage(ownerJid, {
-                            text: `${header}\n\n🎭 *Sticker deleted*`
-                        });
+                    const buffer = await downloadMedia(msgContent);
+                    await conn.sendMessage(ownerJid, {
+                        text: `${info}\n\n🎭 *Sticker deleted*`,
+                    });
+                    if (buffer) {
+                        await conn.sendMessage(ownerJid, { sticker: buffer });
                     }
                 }
 
@@ -221,17 +268,17 @@ ${isGroup ? `👥 *Group:*  ${chatName}` : `💬 *Chat:*   Private`}
                 else if (msgContent.documentMessage) {
                     const fname    = msgContent.documentMessage.fileName || 'Unknown file';
                     const mimetype = msgContent.documentMessage.mimetype || 'application/octet-stream';
-                    try {
-                        const buffer = await conn.downloadMediaMessage(mek);
+                    const buffer   = await downloadMedia(msgContent);
+                    if (buffer) {
                         await conn.sendMessage(ownerJid, {
                             document: buffer,
                             mimetype,
                             fileName: fname,
-                            caption:  `${header}\n\n📄 *Document deleted*\n_File:_ ${fname}`
+                            caption:  `${info}\n\n📄 *Document deleted*\n📎 *File:* ${fname}`,
                         });
-                    } catch {
+                    } else {
                         await conn.sendMessage(ownerJid, {
-                            text: `${header}\n\n📄 *Document deleted*\n_File:_ ${fname}`
+                            text: `${info}\n\n📄 *Document deleted*\n📎 *File:* ${fname}\n\n⚠️ _Media expired_`,
                         });
                     }
                 }
@@ -240,7 +287,7 @@ ${isGroup ? `👥 *Group:*  ${chatName}` : `💬 *Chat:*   Private`}
                 else if (msgContent.contactMessage) {
                     const cname = msgContent.contactMessage.displayName || 'Unknown';
                     await conn.sendMessage(ownerJid, {
-                        text: `${header}\n\n👤 *Contact deleted*\n_Name:_ ${cname}`
+                        text: `${info}\n\n👤 *Contact deleted*\n📛 *Name:* ${cname}`,
                     });
                 }
 
@@ -249,30 +296,28 @@ ${isGroup ? `👥 *Group:*  ${chatName}` : `💬 *Chat:*   Private`}
                     const lat = msgContent.locationMessage.degreesLatitude;
                     const lng = msgContent.locationMessage.degreesLongitude;
                     await conn.sendMessage(ownerJid, {
-                        text: `${header}\n\n📍 *Location deleted*\n_Lat:_ ${lat}\n_Lng:_ ${lng}`
+                        text: `${info}\n\n📍 *Location deleted*\n🌐 https://maps.google.com/?q=${lat},${lng}`,
                     });
                 }
 
-                // ── Unknown ──
+                // ── Unknown / other ──
                 else {
+                    const msgType = Object.keys(msgContent)[0] || 'unknown';
                     await conn.sendMessage(ownerJid, {
-                        text: `${header}\n\n❓ *Message deleted (unknown type)*`
+                        text: `${info}\n\n❓ *Deleted* (${msgType})`,
                     });
                 }
 
-                // Remove from cache
-                msgCache.delete(deletedKey);
+                // Remove from cache after handling
+                msgCache.delete(deletedId);
 
             } catch (innerErr) {
-                console.log('[ANTIDELETE INNER ERROR]:', innerErr.message);
+                console.log('[ANTIDELETE inner error]:', innerErr.message);
             }
         }
     } catch (e) {
-        console.log('[ANTIDELETE onDelete ERROR]:', e.message);
+        console.log('[ANTIDELETE onDelete]:', e.message);
     }
 }
 
-// ══════════════════════════════════════════
-//   EXPORTS
-// ══════════════════════════════════════════
 module.exports = { onMessage, onDelete };
