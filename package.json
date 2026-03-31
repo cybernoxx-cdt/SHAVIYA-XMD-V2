@@ -1,12 +1,13 @@
 {
-  "name": "SHAVIYA-MD-V1",
-  "version": "1.0.0",
-  "description": "SHAVIYA-MD MULTI DEVICE WHATSAPP BOT",
+  "name": "SHAVIYA-XMD-V2",
+  "version": "2.0.0",
+  "description": "SHAVIYA-XMD V2 WhatsApp Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "stop": "pm2 stop SHAVIYA-MD-V1",
-    "restart": "pm2 restart SHAVIYA-MD-V1"
+    "heroku-postbuild": "npm install --platform=linux --arch=x64 sharp && npm rebuild sharp",
+    "stop": "pm2 stop SHAVIYA-XMD-V2",
+    "restart": "pm2 restart SHAVIYA-XMD-V2"
   },
   "engines": {
     "node": "20.x"
@@ -36,8 +37,7 @@
     "crypto-js": "latest",
     "dotenv": "^16.5.0",
     "express": "latest",
-    "ffmpeg": "^0.0.4",
-    "ffmpeg-static": "latest",
+    "ffmpeg-static": "^5.2.0",
     "file-type": "^16.5.3",
     "file_size_url": "1.0.4",
     "fluent-ffmpeg": "^2.1.2",
@@ -45,7 +45,6 @@
     "fs": "^0.0.1-security",
     "fs-extra": "^11.1.0",
     "g-i-s": "latest",
-    "getscreenshot.js": "latest",
     "google-tts-api": "^2.0.2",
     "javascript-obfuscator": "^4.0.0",
     "jimp": "latest",
@@ -63,7 +62,6 @@
     "pdfkit": "^0.14.0",
     "pino": "^9.5.0",
     "pm2": "^6.0.8",
-    "puppeteer": "^24.38.0",
     "qrcode-reader": "^1.0.4",
     "qrcode-terminal": "^0.12.0",
     "ruhend-scraper": "8.0.3",
@@ -73,7 +71,6 @@
     "sqlite3": "^5.1.7",
     "unzipper": "latest",
     "util": "^0.12.5",
-    "vm": "^0.1.0",
     "wa-sticker-formatter": "^4.4.4",
     "wa_set_pkg": "1.0.5",
     "xml2js": "latest",
