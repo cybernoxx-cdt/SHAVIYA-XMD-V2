@@ -2,9 +2,18 @@
 var commands = [];
 
 function cmd(info, func) {
-    var data = info;
+    var data = Object.assign({}, info);
     data.function = func;
-    data.pattern = (info.pattern || '').toLowerCase();
+
+    // ✅ FIX: pattern can be RegExp or string — don't call .toLowerCase() on RegExp
+    if (typeof info.pattern === 'string') {
+        data.pattern = info.pattern.toLowerCase();
+    } else if (info.pattern instanceof RegExp) {
+        data.pattern = info.pattern; // keep RegExp as-is
+    } else {
+        data.pattern = info.pattern || '';
+    }
+
     data.alias = info.alias || [];
     data.react = info.react || '';
     data.on = info.on || 'command';
