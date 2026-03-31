@@ -12,7 +12,7 @@ const { cmd } = require('../command');
 cmd({
     pattern: 'vv',
     alias: ['viewonce', 'retrieve'],
-    react: '🐳',
+    react: '💫',
     desc: 'Retrieve View Once media',
     category: 'tools',
     filename: __filename
