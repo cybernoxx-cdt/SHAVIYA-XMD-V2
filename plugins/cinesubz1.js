@@ -22,12 +22,12 @@ function saveSessionConfig(sessionId, config) {
 }
 
 function getBotName(sessionId) {
-  return getSessionConfig(sessionId).botName || "Sʜᴀᴠɪʏᴀ Xᴍᴅ";
+  return getSessionConfig(sessionId).botName || "𝐌𝐫.𝐇𝐚𝐬𝐢𝐲𝐚 𝐓𝐞𝐜𝐡 © 𝟐𝟎𝟐𝟔 🇱🇰";
 }
 
 function getHardThumbUrl(sessionId) {
   return getSessionConfig(sessionId).thumbUrl ||
-    "https://image2url.com/r2/default/images/1774184263251-f9306abd-80ec-4b38-830e-73649a3d687e.png";
+    "https://raw.githubusercontent.com/chamodxxc/Cnwmd7-/main/IMG-20260317-WA0046.jpg";
 }
 
 function isMovieDocOn(sessionId) {
@@ -95,7 +95,8 @@ async function sendDocWithCaption(conn, from, info, file, quoted, footer, sessio
 }
 
 cmd({
-  pattern: "cinesubz",
+  pattern: "cz",
+  alias: ["cinesubz"],
   desc: "CineSubz downloader",
   category: "downloader",
   react: "🍿",
@@ -103,7 +104,7 @@ cmd({
 }, async function(conn, mek, m, opts) {
   var from = opts.from, q = opts.q, reply = opts.reply, sessionId = opts.sessionId;
   try {
-    if (!q) return reply("Example: .cinesubz Avangers");
+    if (!q) return reply("Example: .cz Avengers");
 
     var footer = "✫ " + getBotName(sessionId) + " ✫";
     await react(conn, from, m.key, "🔍");
