@@ -1,8 +1,8 @@
 const { cmd } = require('../command');
 const { fetchJson } = require('../lib/functions');
 
-const footer = "> © Powerd by Sʜᴀᴠɪʏᴀ-Xᴍᴅ 🌛";
-const menuImage = "https://files.catbox.moe/bw91oz.jpg";
+const footer = "> © Powerd by Sʜᴀᴠɪʏᴀ-Xᴍᴅ 🌝";
+const menuImage = "https://files.catbox.moe/8fxouz.jpg";
 
 let isChoosing = false;
 let isChoosingQuality = false;
@@ -30,7 +30,7 @@ cmd({
         if (!searchApi.result?.xvideos?.length)
             return await reply("❌ No results found!");
 
-        let listText = "🫣 𝐒𝐇𝐀𝐕𝐈𝐘𝐀-𝐗𝐌𝐃 XNXX SEARCH RESULTS\n\n🔢 *Reply a number to choose a result.*\n\n";
+        let listText = "🤤 𝐒𝐇𝐀𝐕𝐈𝐘𝐀-𝐗𝐌𝐃 XNXX SEARCH RESULTS\n\n🔢 *Reply a number to choose a result.*\n\n";
 
         searchApi.result.xvideos.forEach((item, i) => {
             listText += `*${i + 1}.* | ${item.title || "No title"}\n`;
