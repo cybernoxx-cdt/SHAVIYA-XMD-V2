@@ -45,7 +45,7 @@ function getDocPrefix(sessionId) {
 }
 
 function getFilePrefix(sessionId) {
-  return getSessionConfig(sessionId).filePrefix || "【SHAVIYA-XMD】";
+  return getSessionConfig(sessionId).filePrefix || "ꜰɪʟᴍ ᴜᴘʟᴏᴀᴅ ʙʏ ꜱʜᴀᴠɪʏᴀ";
 }
 
 // ═══════════════════════════════════════════════════
@@ -292,7 +292,7 @@ async function handleMovieDownload(conn, from, sender, dlLinks, title, quotedMsg
 // ═══════════════════════════════════════════════════
 cmd({
   pattern: "movie",
-  alias: ["cinetv", "cinesubz", "watch"],
+  alias: ["cinetv", "cinesubz", "ct"],
   desc: "Download movies & TV series from CineSubz",
   category: "downloader",
   react: "🎬",
