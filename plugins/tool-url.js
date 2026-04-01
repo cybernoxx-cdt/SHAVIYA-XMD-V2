@@ -174,21 +174,7 @@ cmd({
       text: successMessage,
       edit: processingMsg.key
     });
-
-    // Also send the link as a clickable button message
-    await client.sendMessage(message.key.remoteJid, {
-      text: `🔗 *Click the link below to view/download your file:*\n\n${mediaUrl}`,
-      contextInfo: {
-        forwardingScore: 999,
-        isForwarded: true,
-        forwardedNewsletterMessageInfo: {
-          newsletterJid: '120363304437429368@newsletter',
-          newsletterName: 'SHAVIYA-XMD',
-          serverMessageId: 1
-        }
-      }
-    });
-
+    
     console.log(`✅ [UPLOAD] ${mediaType} uploaded: ${mediaUrl}`);
 
   } catch (error) {
