@@ -136,14 +136,14 @@ global.checkAccess = function(sessionId, senderNumber, isOwner, isGroup) {
       return { allowed: true, mode };
 
     case 'private':
-      return { allowed: false, mode, reason: '🔒 BOT PRIVATE MODE. Owner Only.' };
+      return { allowed: false, mode, reason: '*🔒 ʙᴏᴛ ɪꜱ ᴘʀɪᴠᴀᴛᴇ ᴍᴏᴅᴇ (ᴏᴡɴᴇʀ ᴏɴʟʏ)*' };
 
     case 'inbox':
-      if (isGroup) return { allowed: false, mode, reason: '📩 BOT INBOX MODE. Inbox Only.' };
+      if (isGroup) return { allowed: false, mode, reason: '*📩 ʙᴏᴛ ɪꜱ ɪɴʙᴏx ᴍᴏᴅᴇ (ɪɴʙᴏx ᴏɴʟʏ)*' };
       return { allowed: true, mode };
 
     case 'group':
-      if (!isGroup) return { allowed: false, mode, reason: '👥 BOT GROUP MODE. Groups Only.' };
+      if (!isGroup) return { allowed: false, mode, reason: '*👥 ʙᴏᴛ ɪꜱ ɢʀᴏᴜᴘ ᴍᴏᴅᴇ (ɢʀᴏᴜᴘ ᴏɴʟʏ)*' };
       return { allowed: true, mode };
 
     case 'premium':
