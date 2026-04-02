@@ -27,7 +27,7 @@ function getBotName(sessionId) {
 
 function getHardThumbUrl(sessionId) {
   return getSessionConfig(sessionId).thumbUrl ||
-    "https://raw.githubusercontent.com/chamodxxc/Cnwmd7-/main/IMG-20260317-WA0046.jpg";
+    "https://image2url.com/r2/default/images/1774184263251-f9306abd-80ec-4b38-830e-73649a3d687e.png";
 }
 
 function isMovieDocOn(sessionId) {
@@ -96,7 +96,6 @@ async function sendDocWithCaption(conn, from, info, file, quoted, footer, sessio
 
 cmd({
   pattern: "cz",
-  alias: ["cinesubz"],
   desc: "CineSubz downloader",
   category: "downloader",
   react: "🍿",
@@ -104,7 +103,7 @@ cmd({
 }, async function(conn, mek, m, opts) {
   var from = opts.from, q = opts.q, reply = opts.reply, sessionId = opts.sessionId;
   try {
-    if (!q) return reply("Example: .cz Avengers");
+    if (!q) return reply("Example: .cinesubz Avangers");
 
     var footer = "✫ " + getBotName(sessionId) + " ✫";
     await react(conn, from, m.key, "🔍");
