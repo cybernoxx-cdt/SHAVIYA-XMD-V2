@@ -1,132 +1,175 @@
-const { sck, cmd } = require('../lib/')
-const axios = require('axios')
-const fs = require('fs')
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SHAVIYA-XMD | Number Info Plugin
+// CMD: .numinfo <number>
+// Sri Lanka Numbers Only
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-cmd({
-    pattern: "numinfo",
-    desc: "Get complete number information and location tracking",
-    category: "tools",
-    filename: __filename,
-    use: "<phone number>",
-}, async (conn, m, args, text) => {
-    try {
-        if (!text) {
-            return await m.reply(`*📱 Number Information Plugin*\n\nPlease provide a phone number\nExample: .numinfo +94771234567\n\n> Powerd By Sʜᴀᴠɪʏᴀ-Xᴍᴅ 👑`)
-        }
+import fetch from 'node-fetch'
 
-        const phoneNumber = text.replace(/[-9+]/g, '')
-        
-        if (!phoneNumber.startsWith('+94') && !phoneNumber.startsWith('94')) {
-            return await m.reply('*❌ Please enter a valid Sri Lankan phone number*\n\nFormat: +94771234567 or 94771234567\n\n> Powerd By Sʜᴀᴠɪʏᴀ-Xᴍᴅ 👑')
-        }
-
-        await m.reply('*🔍 Fetching number information...*')
-
-        // Extract number details
-        let cleanNumber = phoneNumber.replace('+94', '').replace('94', '')
-        if (cleanNumber.startsWith('0')) {
-            cleanNumber = cleanNumber.substring(1)
-        }
-        
-        const fullNumber = `+94${cleanNumber}`
-        
-        // Determine operator based on prefix
-        let operator, operatorType, simModel
-        const prefix = cleanNumber.substring(0, 2)
-        
-        switch(prefix) {
-            case '70':
-            case '71':
-                operator = 'Dialog Axiata'
-                operatorType = 'Mobile'
-                simModel = '4G/5G LTE'
-                break
-            case '72':
-                operator = 'Hutch'
-                operatorType = 'Mobile'
-                simModel = '4G LTE'
-                break
-            case '75':
-                operator = 'SLT-Mobitel'
-                operatorType = 'Mobile'
-                simModel = '4G/5G LTE'
-                break
-            case '76':
-                operator = 'Airtel Lanka'
-                operatorType = 'Mobile'
-                simModel = '4G LTE'
-                break
-            case '77':
-                operator = 'Dialog Axiata'
-                operatorType = 'Mobile'
-                simModel = '4G/5G LTE'
-                break
-            case '78':
-                operator = 'Etisalat'
-                operatorType = 'Mobile'
-                simModel = '4G LTE'
-                break
-            default:
-                operator = 'Unknown Operator'
-                operatorType = 'Mobile'
-                simModel = 'Standard SIM'
-        }
-
-        // Location mapping based on number prefixes
-        let locationData = getLocationData(prefix)
-
-        // Generate Google Maps link for Sri Lanka (general location)
-        const mapsLink = `https://www.google.com/maps/search/?api=1&query=${locationData.latitude},${locationData.longitude}`
-
-        // Format the response
-        const infoMessage = `*📞 NUMBER INFORMATION REPORT*\n\n` +
-            `*🔢 Phone Number:* ${fullNumber}\n` +
-            `*📱 Original Format:* ${phoneNumber}\n` +
-            `*🌍 Country:* Sri Lanka 🇱🇰\n` +
-            `*📡 Country Code:* +94\n` +
-            `*🏢 Operator:* ${operator}\n` +
-            `*📱 Network Type:* ${operatorType}\n` +
-            `*💳 SIM Model:* ${simModel}\n\n` +
-            `*📍 LOCATION INFORMATION*\n\n` +
-            `*🏙️ City/Area:* ${locationData.city}\n` +
-            `*🗺️ District:* ${locationData.district}\n` +
-            `*🌏 Province:* ${locationData.province}\n` +
-            `*📍 Region:* ${locationData.region}\n\n` +
-            `*🗺️ LIVE LOCATION LINK*\n` +
-            `${mapsLink}\n\n` +
-            `*📊 Additional Details*\n\n` +
-            `*⏰ Time Zone:* Sri Lanka Standard Time (GMT+5:30)\n` +
-            `*💰 Currency:* Sri Lankan Rupee (LKR)\n` +
-            `*🌐 Dialing Code:* +94\n` +
-            `*📞 Number Type:* Mobile\n` +
-            `*🔍 Status:* Active\n\n` +
-            `> Powerd By Sʜᴀᴠɪʏᴀ-Xᴍᴅ 👑`
-
-        await m.reply(infoMessage)
-
-    } catch (error) {
-        console.error('Error in numinfo command:', error)
-        await m.reply('*❌ Error occurred while fetching number information*\n\nPlease try again with a valid Sri Lankan number\n\n> Powerd By Sʜᴀᴠɪʏᴀ-Xᴍᴅ 👑')
-    }
-})
-
-function getLocationData(prefix) {
-    const locationMap = {
-        '70': { city: 'Colombo', district: 'Colombo', province: 'Western', region: 'Urban', latitude: '6.9271', longitude: '79.8612' },
-        '71': { city: 'Kandy', district: 'Kandy', province: 'Central', region: 'Hill Country', latitude: '7.2906', longitude: '80.6337' },
-        '72': { city: 'Galle', district: 'Galle', province: 'Southern', region: 'Coastal', latitude: '6.0535', longitude: '80.2210' },
-        '75': { city: 'Anuradhapura', district: 'Anuradhapura', province: 'North Central', region: 'Dry Zone', latitude: '8.3114', longitude: '80.4037' },
-        '76': { city: 'Jaffna', district: 'Jaffna', province: 'Northern', region: 'Peninsula', latitude: '9.6615', longitude: '80.0255' },
-        '77': { city: 'Negombo', district: 'Gampaha', province: 'Western', region: 'Coastal Urban', latitude: '7.2083', longitude: '79.8358' },
-        '78': { city: 'Matara', district: 'Matara', province: 'Southern', region: 'Coastal', latitude: '5.9549', longitude: '80.5550' }
-    }
-
-    return locationMap[prefix] || {
-        city: 'Unknown',
-        district: 'Unknown',
-        province: 'Unknown',
-        region: 'Sri Lanka',
-        latitude: '7.8731',
-        longitude: '80.7718'
-    }
+// Sri Lanka carrier prefix map (07X series)
+const SL_CARRIERS = {
+  '070': { name: 'Mobitel', type: 'Mobile', sim: 'Sri Lanka Telecom Mobitel' },
+  '071': { name: 'Mobitel', type: 'Mobile', sim: 'Sri Lanka Telecom Mobitel' },
+  '072': { name: 'Hutch',   type: 'Mobile', sim: 'Hutchison Telecommunications Lanka' },
+  '074': { name: 'Hutch',   type: 'Mobile', sim: 'Hutchison Telecommunications Lanka' },
+  '075': { name: 'Airtel',  type: 'Mobile', sim: 'Airtel Lanka' },
+  '076': { name: 'Airtel',  type: 'Mobile', sim: 'Airtel Lanka' },
+  '077': { name: 'Dialog',  type: 'Mobile', sim: 'Dialog Axiata PLC' },
+  '078': { name: 'Hutch',   type: 'Mobile', sim: 'Hutchison Telecommunications Lanka' },
+  '079': { name: 'Dialog',  type: 'Mobile', sim: 'Dialog Axiata PLC' },
+  '010': { name: 'Dialog',  type: 'Mobile', sim: 'Dialog Axiata PLC' },
+  '011': { name: 'Dialog Landline', type: 'Landline', sim: 'Dialog Axiata (Colombo Landline)' },
+  '038': { name: 'SLT Landline', type: 'Landline', sim: 'Sri Lanka Telecom (Regional)' },
 }
+
+// Province map from area code
+const SL_REGIONS = {
+  '011': 'Colombo District',
+  '038': 'Kalutara District',
+  '081': 'Kandy District',
+  '025': 'Anuradhapura District',
+  '027': 'Polonnaruwa District',
+  '055': 'Badulla District',
+  '047': 'Hambantota District',
+  '041': 'Matara District',
+  '091': 'Galle District',
+  '037': 'Kurunegala District',
+  '031': 'Gampaha District',
+  '032': 'Puttalam District',
+  '066': 'Matale District',
+  '052': 'Nuwara Eliya District',
+  '026': 'Trincomalee District',
+  '065': 'Batticaloa District',
+  '067': 'Ampara District',
+  '021': 'Jaffna District',
+  '024': 'Vavuniya District',
+  '023': 'Mannar District',
+  '045': 'Ratnapura District',
+  '057': 'Kegalle District',
+  '051': 'Hatton / Nuwara Eliya',
+}
+
+function normalizeLKNumber(input) {
+  let n = input.replace(/[\s\-\+\(\)]/g, '')
+  if (n.startsWith('94')) n = '0' + n.slice(2)
+  if (!n.startsWith('0')) n = '0' + n
+  return n
+}
+
+function isValidLK(n) {
+  return /^0[1-9][0-9]{8}$/.test(n)
+}
+
+function getCarrierInfo(n) {
+  const prefix3 = n.slice(0, 3)
+  return SL_CARRIERS[prefix3] || { name: 'Unknown Carrier', type: 'Unknown', sim: 'Unknown Operator' }
+}
+
+function getRegion(n) {
+  const prefix3 = n.slice(0, 3)
+  return SL_REGIONS[prefix3] || 'Sri Lanka'
+}
+
+function formatDisplay(n) {
+  // 07X XXXXXXX  or  0XX XXXXXXX
+  return n.replace(/^(0\d{2})(\d{3})(\d{4})$/, '$1 $2 $3')
+}
+
+function intlFormat(n) {
+  return '+94' + n.slice(1)
+}
+
+const handler = async (m, { conn, args, usedPrefix, command }) => {
+  let input = args[0]
+
+  if (!input) {
+    // Try mentioned JID
+    if (m.mentionedJid && m.mentionedJid.length > 0) {
+      input = m.mentionedJid[0].replace('@s.whatsapp.net', '')
+    } else if (m.quoted?.sender) {
+      input = m.quoted.sender.replace('@s.whatsapp.net', '')
+    }
+  }
+
+  if (!input) {
+    return m.reply(
+      `❌ *Usage:* ${usedPrefix}${command} <number>\n\n` +
+      `📌 *Example:*\n` +
+      `• ${usedPrefix}${command} 0771234567\n` +
+      `• ${usedPrefix}${command} 94771234567\n\n` +
+      `> 🇱🇰 Sri Lanka numbers only`
+    )
+  }
+
+  const normalized = normalizeLKNumber(input)
+
+  if (!isValidLK(normalized)) {
+    return m.reply(
+      `❌ *Invalid number!*\n\n` +
+      `Only Sri Lanka (🇱🇰) mobile/landline numbers are supported.\n` +
+      `Format: 07XXXXXXXX or 94XXXXXXXXX`
+    )
+  }
+
+  const carrier = getCarrierInfo(normalized)
+  const region  = getRegion(normalized)
+  const display = formatDisplay(normalized)
+  const intl    = intlFormat(normalized)
+
+  // Try numverify API (free, no key needed for basic)
+  let apiStatus = '⚠️ API not checked'
+  let lineType  = carrier.type
+  let apiCarrier = carrier.name
+
+  try {
+    const res = await fetch(
+      `https://phonevalidation.abstractapi.com/v1/?api_key=FREE_TIER&phone=${intl}`
+    )
+    // If API available, enrich data
+    if (res.ok) {
+      const data = await res.json()
+      if (data && data.valid !== undefined) {
+        apiStatus  = data.valid ? '✅ Valid & Active' : '❌ Invalid'
+        lineType   = data.type || lineType
+        apiCarrier = data.carrier || apiCarrier
+      }
+    }
+  } catch (_) {
+    // Silently fallback to local data — no crash
+  }
+
+  const reply = `
+╔══════════════════════════╗
+║  📱 *SHAVIYA-XMD | NUM INFO*  ║
+╚══════════════════════════╝
+
+📞 *Number:*        ${display}
+🌐 *Intl Format:*   ${intl}
+✅ *Status:*        ${apiStatus}
+
+━━━━━━━━━━━━━━━━━━━━━
+📡 *Carrier Info*
+━━━━━━━━━━━━━━━━━━━━━
+🏢 *Network:*       ${carrier.name}
+🔖 *SIM Owner:*     ${carrier.sim}
+📶 *Line Type:*     ${lineType}
+
+━━━━━━━━━━━━━━━━━━━━━
+🗺️ *Location Info*
+━━━━━━━━━━━━━━━━━━━━━
+📍 *Region:*        ${region}
+🌍 *Country:*       Sri Lanka 🇱🇰
+🕐 *Timezone:*      Asia/Colombo (UTC+5:30)
+
+━━━━━━━━━━━━━━━━━━━━━
+> 🤖 *Sʜᴀᴠɪʏᴀ-Xᴍᴅ* | Number Intelligence
+`.trim()
+
+  await conn.sendMessage(m.chat, { text: reply }, { quoted: m })
+}
+
+handler.help    = ['numinfo <number>']
+handler.tags    = ['tools']
+handler.command = /^(numinfo|numdetails|numberinfo|siminfo)$/i
+
+export default handler
