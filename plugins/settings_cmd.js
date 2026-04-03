@@ -20,7 +20,7 @@ async (conn, mek, m, { isOwner, q, reply }) => {
     if (!isOwner) return reply('❌ Owner only!');
     if (!q) return reply(`🖊️ *Current footer:* ${getSetting('footer')}\n\nUsage: .setfooter My Bot Name`);
 
-    setSetting('footer', q);
+    await setSetting('footer', q);
     reply(`✅ *Footer set to:* ${q}`);
 });
 
@@ -37,7 +37,7 @@ async (conn, mek, m, { isOwner, q, reply }) => {
     if (!isOwner) return reply('❌ Owner only!');
     if (!q) return reply(`🖼️ *Current thumb:* ${getSetting('thumb') || 'Not set'}\n\nUsage: .setthumb https://...`);
 
-    setSetting('thumb', q);
+    await setSetting('thumb', q);
     reply(`✅ *Thumbnail URL saved!*`);
 });
 
@@ -54,7 +54,7 @@ async (conn, mek, m, { isOwner, q, reply }) => {
     if (!isOwner) return reply('❌ Owner only!');
     if (!q) return reply(`🔤 *Current prefix:* ${getSetting('prefix') || 'Not set'}\n\nUsage: .setprefix 🎬`);
 
-    setSetting('prefix', q);
+    await setSetting('prefix', q);
     reply(`✅ *Caption prefix set to:* ${q}`);
 });
 
@@ -70,7 +70,7 @@ async (conn, mek, m, { isOwner, q, reply }) => {
     if (!isOwner) return reply('❌ Owner only!');
     if (!q) return reply(`📝 *Current fname:* ${getSetting('fname') || 'Not set'}\n\nUsage: .setfname SHAVIYA`);
 
-    setSetting('fname', q);
+    await setSetting('fname', q);
     reply(`✅ *File name prefix set to:* ${q}`);
 });
 
@@ -91,10 +91,10 @@ async (conn, mek, m, { isOwner, q, reply }) => {
     }
 
     if (q === 'on') {
-        setSetting('moviedoc', true);
+        await setSetting('moviedoc', true);
         reply('✅ *Moviedoc ON* - Movie poster used as thumbnail!');
     } else if (q === 'off') {
-        setSetting('moviedoc', false);
+        await setSetting('moviedoc', false);
         reply('❌ *Moviedoc OFF*');
     } else {
         reply('Usage: .moviedoc on / off');
@@ -119,10 +119,10 @@ async (conn, mek, m, { isOwner, q, reply }) => {
     }
 
     if (q === 'on') {
-        setSetting('button', true);
+        await setSetting('button', true);
         reply('✅ *Button mode ON!*');
     } else if (q === 'off') {
-        setSetting('button', false);
+        await setSetting('button', false);
         reply('❌ *Button mode OFF*');
     } else {
         reply('Usage: .button on / off');
