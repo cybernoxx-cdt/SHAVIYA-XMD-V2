@@ -115,11 +115,11 @@ async (robin, mek, m, {
       ☘ ʙᴏᴛ ᴍᴇɴᴜ  - .menu
       🔥 ʙᴏᴛ ꜱᴘᴇᴇᴅ - .ping
 
-> © Powered by 𝗦𝗛𝗔𝗩𝗜𝗬𝗔-𝗫𝗠𝗗 𝗩𝟰 💲`;
+> © Powered by 𝗦𝗛𝗔𝗩𝗜𝗬𝗔-𝗫𝗠𝗗 𝗩2 💲`;
 
         // Send Image + Caption
         await robin.sendMessage(from, {
-            image: { url: "https://files.catbox.moe/s1pn69.jpg" },
+            image: { url: "https://files.catbox.moe/2w9wht.jpg" },
             caption: status,
             contextInfo: {
                 mentionedJid: [sender],
