@@ -206,7 +206,7 @@ async (conn, mek, m, { from, body, isOwner }) => {
         }
 
         const newVal    = !isOff;
-        setSetting(setting.key, newVal);
+        await setSetting(setting.key, newVal);
 
         // ── Special live handlers ────────────
         if (setting.key === 'autoTyping') {
@@ -357,7 +357,7 @@ Or use *.settings* for the full menu.`
     if (boolMap[keyRaw]) {
         if (value !== 'on' && value !== 'off') return reply(`❌ Use *on* or *off*\nExample: *.set ${keyRaw} on*`);
         const newVal = value === 'on';
-        setSetting(boolMap[keyRaw], newVal);
+        await setSetting(boolMap[keyRaw], newVal);
 
         if (keyRaw === 'autotyping') {
             if (newVal) startPresence(conn, from, 'composing', _typingTimers);
@@ -377,7 +377,7 @@ Or use *.settings* for the full menu.`
         const { key: sk, valid } = strMap[keyRaw];
         if (valid && !valid.includes(value)) return reply(`❌ Invalid: *${value}*\nValid: ${valid.join(', ')}`);
         const saveVal = (keyRaw === 'prefix' || keyRaw === 'footer') ? args.slice(1).join(' ').trim() : value;
-        setSetting(sk, saveVal);
+        await setSetting(sk, saveVal);
         return reply(`✅ *${keyRaw.toUpperCase()}* set to: *${saveVal}*\n_Saved instantly_ ✅`);
     }
 
