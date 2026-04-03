@@ -20,7 +20,7 @@ async function getCol() {
     const { MongoClient } = require('mongodb');
     const client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
     await client.connect();
-    _mongoCol = client.db('hasiya_md').collection('access_config');
+    _mongoCol = client.db('shaviya_xmd').collection('access_config');
     console.log('[ACCESS] MongoDB connected ✅');
     return _mongoCol;
   } catch (e) {
