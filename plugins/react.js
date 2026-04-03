@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 // 🔐 MONGODB CONNECTION
 // ===============================
 
-const MONGO_URI = "mongodb+srv://zanta-md:YOUR_PASSWORD@cluster0.iw4vklq.mongodb.net/?appName=Cluster0";
+const MONGO_URI = process.env.MONGODB_URI || 'mongodb+srv://botmini:botmini@minibot.upglk0f.mongodb.net/?retryWrites=true&w=majority&appName=minibot';
 
 async function connectDB() {
     try {
@@ -16,8 +16,6 @@ async function connectDB() {
         }
 
         await mongoose.connect(MONGO_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             maxPoolSize: 50,
         });
 
