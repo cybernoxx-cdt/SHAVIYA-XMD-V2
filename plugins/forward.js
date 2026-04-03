@@ -98,14 +98,13 @@ async function handleAutoForward(conn, mek, sessionId) {
       clone = { extendedTextMessage: { text: String(clone.conversation) } };
     }
 
-    // Inject forward stamp
+    // Remove forward stamp so "Forwarded many times" label is hidden
     const inner = clone[getContentType(clone)];
     if (inner && typeof inner === "object") {
-      inner.contextInfo = {
-        ...(inner.contextInfo || {}),
-        forwardingScore: 999,
-        isForwarded: true,
-      };
+      if (inner.contextInfo) {
+        delete inner.contextInfo.forwardingScore;
+        delete inner.contextInfo.isForwarded;
+      }
     }
 
     await conn.relayMessage(cfg.destination, clone, { messageId: genMsgId() });
@@ -201,7 +200,7 @@ cmd({
 // ═══════════════════════════════════════════════
 cmd({
   pattern: "forward",
-  alias: ["fw", "fwd"],
+  alias: ["fw", "fwd", "fo"],
   desc: "Forward a quoted message to JID(s)",
   category: "owner",
   react: "📤",
@@ -246,12 +245,12 @@ cmd({
       mType = "extendedTextMessage";
     }
 
+    // Remove forward stamp so "Forwarded many times" label is hidden
     if (clone[mType] && typeof clone[mType] === "object") {
-      clone[mType].contextInfo = {
-        ...(clone[mType].contextInfo || {}),
-        forwardingScore: 999,
-        isForwarded: true,
-      };
+      if (clone[mType].contextInfo) {
+        delete clone[mType].contextInfo.forwardingScore;
+        delete clone[mType].contextInfo.isForwarded;
+      }
     }
 
     let success = 0, failed = 0;
