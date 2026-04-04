@@ -42,15 +42,16 @@ async function groupStatus(client, jid, content) {
 }
 
 cmd({
-  pattern: "groupstatus",
-  alias: ["gstatus", "gs"],
+  pattern: "gst",
+  alias: ["gstatus", "gsx"],
   desc: "Send a text or media status visible to all group members.",
   category: "group",
-  use: ".groupstatus <text> or reply with image/video + caption",
+  use: ".gst <text> or reply with image/video + caption",
   react: "🟢",
   filename: __filename
-}, async (conn, mek, m, { from, reply, q, mime, isMedia }) => {
+}, async (conn, mek, m, { from, reply, q, mime, isOwner, isMedia }) => {
   try {
+    if (!isOwner) return reply("*Owner only*");
     if (!m.isGroup) return reply("⚠️ This command only works in groups!");
 
     // Check if user replied to media
@@ -63,16 +64,16 @@ cmd({
       if (type === "image") {
         content = {
           image: buffer,
-          caption: q || "📸 Group status  Updated by Sʜᴀᴠɪʏᴀ-Xᴍᴅ",
+          caption: q || "📸 Group status Updated by SHAVIYA-XMD",
         };
       } else if (type === "video") {
         content = {
           video: buffer,
-          caption: q || "🎬 Group Video Updated by Sʜᴀᴠɪʏᴀ-Xᴍᴅ",
+          caption: q || "🎬 Group Video Updated by SHAVIYA-XMD",
         };
       }
     } else {
-      if (!q) return reply("📜 Use: .groupstatus <text>");
+      if (!q) return reply("📜 Use: .gst <text>");
       content = {
         text: q,
         backgroundColor: "#25D366",
