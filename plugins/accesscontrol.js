@@ -143,7 +143,7 @@ global.checkAccess = function(sessionId, senderNumber, isOwner, isGroup) {
 
   switch (mode) {
     case 'public':         return { allowed: true, mode };
-    case 'private':        return { allowed: false, reason: 'private', mode };
+    case 'private':        return { allowed: false, reason: 'ᴏᴡɴᴇʀ ᴏɴʟʏ ʏꜱᴇ ᴛʜɪꜱ ʙᴏᴛ (ᴘʀɪᴠᴀᴛᴇ) ❌', mode };
     case 'inbox':          return { allowed: !isGroup, mode };
     case 'group':          return { allowed: isGroup,  mode };
     case 'premium':        return { allowed: isPremium, reason: isPremium ? '' : 'premium', mode };
