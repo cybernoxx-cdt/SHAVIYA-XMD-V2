@@ -72,7 +72,7 @@ async function convertToOpus(inputBuf) {
 }
 
 // Voice note MP3 URL
-const VOICE_NOTE_URL = "https://files.catbox.moe/w9r46m.mp3";
+const VOICE_NOTE_URL = "https://files.catbox.moe/2l1mj6.mp3";
 
 cmd({
     pattern: "alive",
