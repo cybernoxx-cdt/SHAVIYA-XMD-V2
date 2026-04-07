@@ -3,6 +3,7 @@ const config = require('../config');
 
 cmd({
     pattern: "getpp",
+    alias: ["dpdipan", "dipanhuth", "dpdipanhuth"],
     react: "🖼️",
     desc: "Send profile picture by phone number",
     category: "owner",
