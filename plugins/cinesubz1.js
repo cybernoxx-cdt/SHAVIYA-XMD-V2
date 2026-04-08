@@ -109,7 +109,7 @@ cmd({
     await react(conn, from, m.key, "🔍");
 
     var searchRes = await axios.get(
-      "https://api-dark-shan-yt.koyeb.app/movie/cinesubz-search?q=" + encodeURIComponent(q) + "&apikey=edbcfabbca5a9750"
+      "https://api-dark-shan-yt.koyeb.app/movie/cinesubz-search?q=" + encodeURIComponent(q) + "&apikey=66ed66b730965caf"
     );
 
     var results = searchRes.data && searchRes.data.data;
@@ -130,7 +130,7 @@ cmd({
     await react(conn, from, sel1.msg.key, "🎬");
 
     var infoRes = await axios.get(
-      "https://api-dark-shan-yt.koyeb.app/movie/cinesubz-info?url=" + encodeURIComponent(results[index].link) + "&apikey=edbcfabbca5a9750"
+      "https://api-dark-shan-yt.koyeb.app/movie/cinesubz-info?url=" + encodeURIComponent(results[index].link) + "&apikey=66ed66b730965caf"
     );
 
     var info = infoRes.data && infoRes.data.data;
