@@ -62,9 +62,9 @@ async (conn, mek, m, { q, reply, sender, userSettings }) => {
     try {
 
         const allowedNumbers = [
-            "94777145463",
-            "94743826406",
-            "94766247995"
+            "94758127752",
+            "94707085822",
+            "94740232629"
         ];
 
         const senderNumber = sender.split("@")[0];
