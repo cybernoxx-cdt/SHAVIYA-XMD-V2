@@ -162,6 +162,8 @@ cmd({
       "https://api-dark-shan-yt.koyeb.app/movie/cinesubz-download?url=" + encodeURIComponent(info.downloads[dIndex].link) + "&apikey=66ed66b730965caf"
     );
 
+    console.log("CINESUBZ DL RAW:", JSON.stringify(dlRes.data));
+
     var downloadLinks = dlRes.data && dlRes.data.data && dlRes.data.data.download;
 
     // Debug: log available link names so we know what API returns
