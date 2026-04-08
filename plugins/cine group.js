@@ -3,7 +3,7 @@ const axios = require('axios');
 const sharp = require('sharp');
 const fg = require('api-dylux'); // api-dylux අවශ්‍ය වේ
 
-const cinesubz_footer = "𝐌𝐫.𝐇𝐚𝐬𝐢𝐲𝐚 𝐓𝐞𝐜𝐡 © 𝟐𝟎𝟐𝟔 🇱🇰";
+const cinesubz_footer = "© Sʜᴀᴠɪʏᴀ Xᴍᴅ 🇱🇰";
 // ඔබේ ස්ථාවර GitHub පින්තූර ලින්ක් එක
 const fixed_thumb_url = "https://image2url.com/r2/default/images/1774184263251-f9306abd-80ec-4b38-830e-73649a3d687e.png";
 
@@ -75,7 +75,7 @@ cmd({
 
         // 1️⃣ Search
         const searchRes = await axios.get(
-            `https://api-dark-shan-yt.koyeb.app/movie/cinesubz-search?q=${encodeURIComponent(q)}&apikey=edbcfabbca5a9750`
+            `https://api-dark-shan-yt.koyeb.app/movie/cinesubz-search?q=${encodeURIComponent(q)}&apikey=66ed66b730965caf`
         );
         
         console.log("📂 Search Results:", JSON.stringify(searchRes.data, null, 2));
@@ -98,7 +98,7 @@ cmd({
 
         // 3️⃣ Movie info
         const infoRes = await axios.get(
-            `https://api-dark-shan-yt.koyeb.app/movie/cinesubz-info?url=${encodeURIComponent(results[index].link)}&apikey=edbcfabbca5a9750`
+            `https://api-dark-shan-yt.koyeb.app/movie/cinesubz-info?url=${encodeURIComponent(results[index].link)}&apikey=66ed66b730965caf`
         );
         
         console.log("ℹ️ Movie Info Data:", JSON.stringify(infoRes.data, null, 2));
@@ -131,7 +131,7 @@ cmd({
 
         // 5️⃣ Get Download links from API
         const dlRes = await axios.get(
-            `https://api-dark-shan-yt.koyeb.app/movie/cinesubz-download?url=${encodeURIComponent(info.downloads[dIndex].link)}&apikey=edbcfabbca5a9750`
+            `https://api-dark-shan-yt.koyeb.app/movie/cinesubz-download?url=${encodeURIComponent(info.downloads[dIndex].link)}&apikey=66ed66b730965caf`
         );
         
         console.log("🔗 Download Links Data:", JSON.stringify(dlRes.data, null, 2));
