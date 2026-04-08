@@ -159,7 +159,7 @@ cmd({
     await react(conn, from, sel2.msg.key, "⬇️");
 
     var dlRes = await axios.get(
-      "https://api-dark-shan-yt.koyeb.app/movie/cinesubz-download?url=" + encodeURIComponent(info.downloads[dIndex].link) + "&apikey=edbcfabbca5a9750"
+      "https://api-dark-shan-yt.koyeb.app/movie/cinesubz-download?url=" + encodeURIComponent(info.downloads[dIndex].link) + "&apikey=66ed66b730965caf"
     );
 
     var downloadLinks = dlRes.data && dlRes.data.data && dlRes.data.data.download;
