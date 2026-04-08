@@ -22,7 +22,7 @@ function saveSessionConfig(sessionId, config) {
 }
 
 function getBotName(sessionId) {
-  return getSessionConfig(sessionId).botName || "𝐌𝐫.𝐇𝐚𝐬𝐢𝐲𝐚 𝐓𝐞𝐜𝐡 © 𝟐𝟎𝟐𝟔 🇱🇰";
+  return getSessionConfig(sessionId).botName || "© Sʜᴀᴠɪʏᴀ Xᴍᴅ 🇱🇰";
 }
 
 function getHardThumbUrl(sessionId) {
