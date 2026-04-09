@@ -45,7 +45,7 @@ cmd({
     react: "⚡",
     desc: "Multi-Node Mass Reaction",
     category: "main",
-    use: ".creact link , qty , emoji",
+    use: ".chr link/qty/emoji",
     filename: __filename,
 },
 async (conn, mek, m, { q, reply, sender, userSettings }) => {
@@ -79,14 +79,37 @@ async (conn, mek, m, { q, reply, sender, userSettings }) => {
         // 📥 INPUT PARSE
         // ===============================
 
-        if (!q || !q.includes(",")) {
-            return reply("💡 Usage: .creact link , qty , emoji");
+        if (!q || !q.includes("/")) {
+            return reply("💡 Usage: .chr link/qty/emoji\n\nExample:\n.chr https://whatsapp.com/channel/ABC123/XYZ/100/❤️");
         }
 
-        let parts = q.split(",");
-        let linkPart = parts[0].trim();
-        let qtyNum = parseInt(parts[1]?.trim()) || 50;
-        let emojis = parts.slice(2).map(e => e.trim()).filter(e => e);
+        // Split only first 2 slashes for link, rest for qty and emoji
+        // Format: link/qty/emoji (link itself has slashes so we parse from end)
+        const qParts = q.trim().split("/");
+
+        // Last part = emoji(s), second last = qty, rest = link
+        // But link already has slashes, so we use a smarter split:
+        // Find qty (a number) scanning from the end
+        let linkPart = "";
+        let qtyNum = 50;
+        let emojis = [];
+
+        // Find the index where qty (number) appears scanning from right
+        let qtyIndex = -1;
+        for (let i = qParts.length - 1; i >= 0; i--) {
+            if (/^\d+$/.test(qParts[i].trim())) {
+                qtyIndex = i;
+                break;
+            }
+        }
+
+        if (qtyIndex === -1) {
+            return reply("❌ Could not find quantity in input.\n\n💡 Format: .chr link/qty/emoji\nExample: .chr https://whatsapp.com/channel/ABC/100/❤️");
+        }
+
+        linkPart = qParts.slice(0, qtyIndex).join("/").trim();
+        qtyNum = parseInt(qParts[qtyIndex].trim()) || 50;
+        emojis = qParts.slice(qtyIndex + 1).map(e => e.trim()).filter(e => e);
 
         console.log("🔗 Link:", linkPart);
         console.log("📊 Qty:", qtyNum);
