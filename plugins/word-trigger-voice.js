@@ -113,7 +113,9 @@ function convertToOpusPTT(inputBuffer) {
 
 // ── Send voice note ─────────────────────────────────────────
 async function sendVoiceNote(conn, from, mek, audioUrl) {
-    // Method 1: Download + convert to opus
+
+    // ── Method 1: Download → ffmpeg convert → OGG Opus PTT ──
+    // Best quality, works on iOS + Android
     try {
         const rawBuf  = await downloadAudio(audioUrl);
         const opusBuf = await convertToOpusPTT(rawBuf);
@@ -123,23 +125,56 @@ async function sendVoiceNote(conn, from, mek, audioUrl) {
             mimetype: 'audio/ogg; codecs=opus',
             ptt:      true
         }, { quoted: mek });
+        console.log('[WORD-TRIGGER] ✅ Method 1 (opus convert) success');
         return true;
     } catch (e) {
-        console.log('[WORD-TRIGGER] Opus convert failed, trying URL fallback:', e.message);
+        console.log('[WORD-TRIGGER] Method 1 failed:', e.message);
     }
 
-    // Method 2: Direct URL fallback
+    // ── Method 2: Download buffer → send as audio/mp4 PTT ───
+    // Some Baileys versions accept mp4 audio as PTT
     try {
-        const isOpus = audioUrl.toLowerCase().includes('.opus');
+        const rawBuf = await downloadAudio(audioUrl);
+        await conn.sendPresenceUpdate('recording', from);
+        await conn.sendMessage(from, {
+            audio:    rawBuf,
+            mimetype: 'audio/mp4',
+            ptt:      true
+        }, { quoted: mek });
+        console.log('[WORD-TRIGGER] ✅ Method 2 (mp4 buffer) success');
+        return true;
+    } catch (e2) {
+        console.log('[WORD-TRIGGER] Method 2 failed:', e2.message);
+    }
+
+    // ── Method 3: Direct URL → let Baileys handle download ──
+    // Baileys downloads + processes internally
+    try {
         await conn.sendPresenceUpdate('recording', from);
         await conn.sendMessage(from, {
             audio:    { url: audioUrl },
-            mimetype: isOpus ? 'audio/ogg; codecs=opus' : 'audio/mpeg',
+            mimetype: 'audio/mpeg',
             ptt:      true
         }, { quoted: mek });
+        console.log('[WORD-TRIGGER] ✅ Method 3 (url mpeg) success');
         return true;
-    } catch (e2) {
-        console.log('[WORD-TRIGGER] Fallback also failed:', e2.message);
+    } catch (e3) {
+        console.log('[WORD-TRIGGER] Method 3 failed:', e3.message);
+    }
+
+    // ── Method 4: Send as normal audio (not PTT) ────────────
+    // Last resort — sends as audio file (not voice note style)
+    try {
+        const rawBuf = await downloadAudio(audioUrl);
+        await conn.sendMessage(from, {
+            audio:    rawBuf,
+            mimetype: 'audio/mpeg',
+            ptt:      false
+        }, { quoted: mek });
+        console.log('[WORD-TRIGGER] ✅ Method 4 (audio file fallback) success');
+        return true;
+    } catch (e4) {
+        console.log('[WORD-TRIGGER] All methods failed:', e4.message);
         return false;
     }
 }
