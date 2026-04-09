@@ -1,7 +1,7 @@
 // plugins/sticker.js — SHAVIYA-XMD V2
-// ✅ FIX: Full ffmpeg-based WebP fallback when sharp/wa-sticker-formatter unavailable
-// ✅ FIX: Uses ffmpeg-static → @ffmpeg-installer → system ffmpeg chain
-// ✅ FIX: Supports image, video, sticker inputs
+// ✅ FIXED: Correct ffmpeg WebP filter chain (palettegen/paletteuse removed — GIF-only filters)
+// ✅ FIXED: chmod applied to @ffmpeg-installer binary too
+// ✅ FIXED: pad uses (ow-iw)/2 centering instead of -1:-1 which can error
 
 'use strict';
 
@@ -9,12 +9,12 @@ const { cmd }  = require('../command');
 const fs       = require('fs');
 const path     = require('path');
 const os       = require('os');
-const axios    = require('axios');
 const Config   = require('../config');
 const fluent   = require('fluent-ffmpeg');
 
-// ── Resolve ffmpeg path: ffmpeg-static → @ffmpeg-installer → system ──
+// ── Resolve ffmpeg path ──
 let ffmpegPath = null;
+
 try {
     const staticBin = require('ffmpeg-static');
     if (staticBin && fs.existsSync(staticBin)) {
@@ -28,8 +28,9 @@ if (!ffmpegPath) {
     try {
         const inst = require('@ffmpeg-installer/ffmpeg');
         if (inst && inst.path && fs.existsSync(inst.path)) {
+            try { fs.chmodSync(inst.path, 0o755); } catch (_) {}
             ffmpegPath = inst.path;
-            console.log('[sticker] ✅ @ffmpeg-installer ffmpeg:', inst.path);
+            console.log('[sticker] ✅ @ffmpeg-installer:', inst.path);
         }
     } catch (_) {}
 }
@@ -43,8 +44,9 @@ if (!ffmpegPath) {
 }
 
 if (ffmpegPath) fluent.setFfmpegPath(ffmpegPath);
+else console.error('[sticker] ❌ No ffmpeg found — sticker will not work');
 
-// ── Try loading wa-sticker-formatter (needs sharp) ──
+// ── wa-sticker-formatter (optional, needs sharp) ──
 let Sticker, StickerTypes;
 let stickerFormatterAvailable = false;
 try {
@@ -53,11 +55,10 @@ try {
     StickerTypes = wsf.StickerTypes;
     stickerFormatterAvailable = true;
     console.log('[sticker] ✅ wa-sticker-formatter loaded');
-} catch (e) {
+} catch (_) {
     console.warn('[sticker] ⚠️  wa-sticker-formatter not available — using ffmpeg fallback');
 }
 
-// ── Fake vCard (author watermark) ─────────────────────────────
 const fakevCard = {
     key: { fromMe: false, participant: '0@s.whatsapp.net', remoteJid: 'status@broadcast' },
     message: {
@@ -68,21 +69,31 @@ const fakevCard = {
     }
 };
 
-// ── FFmpeg WebP fallback: converts image/video buffer → WebP sticker ──
+// ── FIXED ffmpeg WebP converter ──
+// KEY FIX: palettegen/paletteuse are GIF-only — they BREAK libwebp encoding.
+// Removed those filters. Simple scale+pad+libwebp works for both static & animated.
 function makeWebpFfmpeg(inputBuffer, isAnimated) {
     return new Promise((resolve, reject) => {
         const ext    = isAnimated ? 'mp4' : 'jpg';
         const tmpIn  = path.join(os.tmpdir(), `stk_in_${Date.now()}.${ext}`);
         const tmpOut = path.join(os.tmpdir(), `stk_out_${Date.now()}.webp`);
-        fs.writeFileSync(tmpIn, inputBuffer);
+
+        const cleanup = () => {
+            try { if (fs.existsSync(tmpIn))  fs.unlinkSync(tmpIn);  } catch (_) {}
+            try { if (fs.existsSync(tmpOut)) fs.unlinkSync(tmpOut); } catch (_) {}
+        };
+
+        try { fs.writeFileSync(tmpIn, inputBuffer); } catch (e) { return reject(e); }
 
         const cmd = fluent(tmpIn);
 
+        // Shared scale+pad filter — center image in 512x512, transparent bg
+        const scaleFilter = "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=white@0.0";
+
         if (isAnimated) {
-            // Animated sticker (GIF/video)
             cmd.addOutputOptions([
                 '-vcodec', 'libwebp',
-                '-vf', "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,fps=15,pad=512:512:-1:-1:color=white@0.0,split[a][b];[a]palettegen=reserve_transparent=on:transparency_color=ffffff[p];[b][p]paletteuse",
+                '-vf', `fps=15,${scaleFilter}`,
                 '-loop', '0',
                 '-preset', 'default',
                 '-an',
@@ -90,10 +101,9 @@ function makeWebpFfmpeg(inputBuffer, isAnimated) {
                 '-t', '8'
             ]);
         } else {
-            // Static sticker
             cmd.addOutputOptions([
                 '-vcodec', 'libwebp',
-                '-vf', "scale='min(512,iw)':'min(512,ih)':force_original_aspect_ratio=decrease,pad=512:512:-1:-1:color=white@0.0",
+                '-vf', scaleFilter,
                 '-preset', 'default',
                 '-loop', '0',
                 '-an',
@@ -106,30 +116,23 @@ function makeWebpFfmpeg(inputBuffer, isAnimated) {
             .on('end', () => {
                 try {
                     const buf = fs.readFileSync(tmpOut);
-                    try { fs.unlinkSync(tmpIn); } catch (_) {}
-                    try { fs.unlinkSync(tmpOut); } catch (_) {}
+                    cleanup();
                     resolve(buf);
-                } catch (e) { reject(e); }
+                } catch (e) { cleanup(); reject(e); }
             })
-            .on('error', (e) => {
-                try { fs.unlinkSync(tmpIn); } catch (_) {}
-                try { fs.unlinkSync(tmpOut); } catch (_) {}
-                reject(e);
-            })
+            .on('error', (e) => { cleanup(); reject(new Error(`ffmpeg: ${e.message}`)); })
             .save(tmpOut);
     });
 }
 
-// ── Main sticker maker ────────────────────────────────────────
 async function makeAndSendSticker(conn, mek, media, mime, packName, reply) {
     const isAnimated = ['videoMessage', 'gifMessage'].includes(mime);
 
-    // Method 1: wa-sticker-formatter (best quality, needs sharp)
     if (stickerFormatterAvailable) {
         try {
             const sticker = new Sticker(media, {
                 pack: packName,
-                type: isAnimated ? StickerTypes.FULL : StickerTypes.FULL,
+                type: StickerTypes.FULL,
                 categories: ['🤩', '🎉'],
                 id: '12345',
                 quality: 75,
@@ -138,24 +141,21 @@ async function makeAndSendSticker(conn, mek, media, mime, packName, reply) {
             const buffer = await sticker.toBuffer();
             return conn.sendMessage(mek.chat, { sticker: buffer }, { quoted: fakevCard });
         } catch (e) {
-            console.warn('[sticker] wa-sticker-formatter failed, trying ffmpeg fallback:', e.message);
+            console.warn('[sticker] wa-sticker-formatter failed, trying ffmpeg:', e.message);
         }
     }
 
-    // Method 2: ffmpeg fallback (works without sharp)
-    if (!ffmpegPath) {
-        return reply('❌ ffmpeg not available on this server. Contact bot owner.');
-    }
+    if (!ffmpegPath) return reply('❌ ffmpeg not found on server. Contact bot owner.');
+
     try {
         const webpBuf = await makeWebpFfmpeg(media, isAnimated);
         return conn.sendMessage(mek.chat, { sticker: webpBuf }, { quoted: fakevCard });
     } catch (e) {
-        console.error('[sticker] ffmpeg fallback failed:', e.message);
-        return reply(`❌ Failed to create sticker: ${e.message}`);
+        console.error('[sticker] ffmpeg failed:', e.message);
+        return reply(`❌ Sticker failed: ${e.message}`);
     }
 }
 
-// ── .sticker / .s ─────────────────────────────────────────────
 cmd({
     pattern:  'sticker',
     alias:    ['s', 'stickergif'],
@@ -177,11 +177,10 @@ async (conn, mek, m, { reply }) => {
         await makeAndSendSticker(conn, mek, media, mime, pack, reply);
     } catch (err) {
         console.error('[sticker]', err.message);
-        reply(`❌ Failed to create sticker: ${err.message}`);
+        reply(`❌ Failed: ${err.message}`);
     }
 });
 
-// ── .take <packname> ──────────────────────────────────────────
 cmd({
     pattern:  'take',
     alias:    ['rename', 'stake'],
