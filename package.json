@@ -78,5 +78,6 @@
     "yt-dlp-exec": "^1.0.2",
     "yt-search": "2.13.1",
     "@bochilteam/scraper": "5.0.1"
-  }
+  },
+  "type": "module"
 }
